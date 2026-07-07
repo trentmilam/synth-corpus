@@ -56,12 +56,11 @@ unverifiable} + formula reconstruction — implemented as three **deterministic*
 `run_redteam(corpus) -> {verdict, findings[]}`; verdict is `high-risk` (a contradiction or arithmetic
 error), `caution` (an unsupported claim), or `proceed`.
 
-## Why deterministic (grounded in the deep-research pass)
+## Why deterministic
 
-The research pass (105 agents; see `docs/superpowers/specs/2026-07-04-redteam-desk-design.md`) found
-the pattern validated in an adjacent regulated domain (a critic layer cut hallucination 11.3%→3.8%),
-no equivalent product for wealth managers (white space), and — critically — that **out-of-the-box
-LLMs are unreliable citation verifiers**. So v1 is deterministic over authoritative documents, not an
+A market and literature scan found the pattern validated in an adjacent regulated domain (a
+critic layer cut hallucination 11.3%→3.8%), no equivalent product for wealth managers (white
+space), and — critically — that **out-of-the-box LLMs are unreliable citation verifiers**. So v1 is deterministic over authoritative documents, not an
 LLM-as-judge; the v2 upgrade is a task-specific fine-tuned verifier, still authoritative-corpus-first.
 
 ## Honest scope (v1)
@@ -73,6 +72,6 @@ with FINRA Rule 3110 supervision — a human stays in the loop).
 
 ## Where it fits
 
-The capstone of the wealth-tech track: it consumes `` labeled packets and is
-scored against their ground truth, and it reuses the integrity philosophy of ``
-(citation-gating) and `` (BD-APP conflict thinking).
+The capstone of the wealth-tech track: it consumes `synth-corpus`'s labeled packets and is
+scored against their ground truth, applying the same citation-gating integrity discipline
+throughout — every finding tied to a document+line reference, never an LLM's unverified say-so.
