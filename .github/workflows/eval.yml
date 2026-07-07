@@ -16,14 +16,16 @@ jobs:
 
       # Companion project: supplies the labeled synthetic corpus the eval is
       # scored against. Checked out as a sibling directory (matching the
-      # layout redteam-desk's eval/eval.py and run_demo.py expect). Pin `ref`
-      # to a specific tag/commit once synth-corpus cuts a release, for a
-      # fully reproducible CI run.
+      # layout redteam-desk's eval/eval.py and run_demo.py expect). `ref`
+      # must stay pinned to the specific synth-corpus tag the README's
+      # numbers were captured against -- bump it (and re-run
+      # scripts/check_readme_numbers.py) whenever synth-corpus cuts a new
+      # release the numbers should track.
       - name: Checkout synth-corpus (companion repo, sibling checkout)
         uses: actions/checkout@v4
         with:
           repository: trentmilam/synth-corpus
-          ref: main
+          ref: v0.1.0
           path: synth-corpus
 
       - name: Set up Python
@@ -41,3 +43,7 @@ jobs:
       - name: Run the full eval against synth-corpus's labeled ground truth
         working-directory: redteam-desk
         run: python eval/eval.py
+
+      - name: Verify README numbers match the eval output
+        working-directory: redteam-desk
+        run: python scripts/check_readme_numbers.py

@@ -18,7 +18,7 @@ from redteam.verify import (
 from redteam.baseline import naive_verify
 
 
-# --- P0-1: fail-open regression -- "could not check" must never look like ---
+# --- fail-open regression -- "could not check" must never look like -------
 # --- "checked, and it's clean" ------------------------------------------------
 
 def test_empty_docs_is_insufficient_data_not_proceed():
@@ -35,8 +35,7 @@ def test_garbage_unmatched_doc_is_insufficient_data_not_proceed():
 
 
 def test_reworded_label_hides_broken_nav_but_verdict_is_not_proceed():
-    """The exact reproduction from the release-gauntlet finding: the NAV is
-    overstated by ~$1.8-2.0M, but only because one label was reworded
+    """The NAV is overstated by ~$1.8-2.0M, but only because one label was reworded
     ("Mgmt fees allocated:" instead of the canonical "Allocated management
     fees:"). The rollforward literally cannot be checked -- the verdict must
     say so, not silently report proceed."""
@@ -89,7 +88,7 @@ def test_capital_account_coverage_reports_found_and_missing():
     assert "Ending capital account (NAV):" in coverage["missing"]
 
 
-# --- P0-6: money-valued contradiction citations must not be scientific notation ---
+# --- money-valued contradiction citations must not be scientific notation ---
 
 def test_money_magnitude_contradiction_with_majority_is_not_scientific_notation():
     docs = {
@@ -108,9 +107,8 @@ def test_money_magnitude_contradiction_with_majority_is_not_scientific_notation(
 
 
 def test_money_magnitude_contradiction_tie_is_not_scientific_notation():
-    """The exact reproduction from the release-gauntlet finding: a two-doc
-    $500M/$450M disagreement (no majority) must still render plainly, in
-    both docs' citations."""
+    """A two-doc $500M/$450M disagreement (no majority) must still render
+    plainly, in both docs' citations."""
     docs = {
         "ppm": "Total commitments (fund size): $500,000,000\n",
         "ddq": "Total commitments (fund size): $450,000,000\n",
@@ -169,7 +167,7 @@ def test_two_doc_tie_flags_both_not_just_one():
     assert all("unresolved conflict" in f["detail"] for f in tie)
 
 
-# --- P1-1: duplicate label within one document must not silently overwrite ---
+# --- duplicate label within one document must not silently overwrite -------
 
 def test_duplicate_label_same_value_is_harmless():
     docs = {"ppm": "Management fee: 2.0%\nManagement fee: 2.0%\n"}
@@ -183,7 +181,7 @@ def test_duplicate_label_conflicting_value_fails_loud():
         _figures(docs)
 
 
-# --- P1-2: input validation --------------------------------------------------
+# --- input validation --------------------------------------------------------
 
 def test_validate_docs_rejects_non_dict():
     with pytest.raises(TypeError):
@@ -213,3 +211,54 @@ def test_naive_verify_rejects_bad_input():
 def test_naive_verify_accepts_valid_docs():
     report = naive_verify({"ic_memo": "net IRR of 45.0%\n"})
     assert report["verdict"] in ("proceed", "caution", "high-risk")
+
+
+# --- label matching must tolerate case/whitespace/word-order variance ------
+# --- (a real contradiction must not go unnoticed just because the two ------
+# --- documents phrase the same figure's label differently) -----------------
+
+def test_case_and_wording_variant_labels_still_catch_a_real_contradiction():
+    """A material contradiction must be caught even when neither document
+    uses the byte-identical canonical label text -- only case, punctuation,
+    and word order differ, not the meaning."""
+    docs = {
+        "ppm": "Fund Size / Total Commitments: $500,000,000\n",
+        "ddq": "total commitments (fund size): $450,000,000\n",
+    }
+    report = run_redteam(docs)
+    assert report["verdict"] == "high-risk"
+    assert any(f["type"] == "contradiction" for f in report["findings"])
+
+
+def test_case_variant_label_alone_is_recognized_by_figures():
+    docs = {"ppm": "MANAGEMENT FEE: 2.0%\n"}
+    figures = _figures(docs)
+    assert figures["Management fee:"]["ppm"] == 2.0
+
+
+def test_genuinely_different_wording_is_not_matched():
+    """Matching tolerates case/whitespace/word-order noise on the SAME
+    label, but must not match a different label or free-text prose as if it
+    were a canonical figure."""
+    docs = {"ppm": "Some unrelated note about the fund's fee structure: 2.0%\n"}
+    figures = _figures(docs)
+    assert figures["Management fee:"] == {}
+
+
+# --- coverage must make "never located" a visible, explicit signal ---------
+
+def test_labels_not_located_lists_labels_missing_from_every_document():
+    report = run_redteam({"ppm": "Management fee: 2.0%\n"})
+    assert report["coverage"]["labels_located"]["Management fee:"] == ["ppm"]
+    assert "Carried interest:" in report["coverage"]["labels_not_located"]
+    assert "Management fee:" not in report["coverage"]["labels_not_located"]
+
+
+# --- the unsupported_claim finding must describe what it actually does -----
+
+def test_unsupported_claim_detail_does_not_imply_a_substantiation_check():
+    report = run_redteam({"ic_memo": "The Fund has achieved a net IRR of 22.4%.\n"})
+    finding = next(f for f in report["findings"] if f["type"] == "unsupported_claim")
+    detail = finding["detail"].lower()
+    assert "does not check" in detail or "not check" in detail
+    assert "no dated cash flows in the data room to substantiate it" not in detail

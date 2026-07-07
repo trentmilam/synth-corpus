@@ -53,6 +53,12 @@ docstring; in short:
   not be verified — a required label was missing or unmatched), or `proceed` (checked, and it's
   clean). `insufficient-data` is deliberately distinct from `proceed`: "nothing was checked" must
   never render identically to "checked, and it's fine."
+- **Coverage** — `run_redteam`'s `coverage` field also reports `labels_located` (which of
+  `LABELS` were found, and in which documents) and `labels_not_located` (labels found in none of
+  the documents). **Check these before trusting a `proceed` verdict**: a figure phrased so
+  differently that no canonical label matches it at all won't appear in `labels_located`, and its
+  cross-document contradiction check silently never ran for that figure — the verdict alone won't
+  tell you that.
 
 ## Full reproduction (requires the companion synth-corpus repo)
 
@@ -65,7 +71,9 @@ answer key and the detectors are independent code, not a checker grading itself)
 
 ```
 git clone https://github.com/trentmilam/redteam-desk
-git clone https://github.com/trentmilam/synth-corpus
+# pinned to the synth-corpus release the numbers below were captured against;
+# bump this alongside the numbers whenever synth-corpus cuts a new release
+git clone --branch v0.1.0 https://github.com/trentmilam/synth-corpus
 # the two repos must sit as siblings:
 #   some-dir/redteam-desk
 #   some-dir/synth-corpus
@@ -95,7 +103,7 @@ reasonable first cut, not a strawman) over the *same* labeled packets and scores
 | verifier | recall | precision | false positives on clean packets |
 |---|---|---|---|
 | deterministic (this tool) | **1.000** | **1.000** | **0** |
-| naive keyword baseline | 0.667 | 0.261 | 17 |
+| naive keyword baseline | 0.667 | 0.240 | 19 |
 
 The naive baseline fails in two honest ways: it **misses the arithmetic break entirely** (a keyword
 scanner has no capital-account rollforward model — the exact domain modeling this tool adds), and it
@@ -119,10 +127,10 @@ verdict semantics.
 
 ## Why deterministic
 
-A market and literature scan found the pattern validated in an adjacent regulated domain (a
-critic layer cut hallucination 11.3%→3.8%), no equivalent product for wealth managers (white
-space), and — critically — that **out-of-the-box LLMs are unreliable citation verifiers**. So v1 is deterministic over authoritative documents, not an
-LLM-as-judge; the v2 upgrade is a task-specific fine-tuned verifier, still authoritative-corpus-first.
+Critic/verifier layers have shown meaningful hallucination reductions in adjacent regulated
+domains, and — critically — **out-of-the-box LLMs are unreliable citation verifiers**. So v1 is
+deterministic over authoritative documents, not an LLM-as-judge; the v2 upgrade is a
+task-specific fine-tuned verifier, still authoritative-corpus-first.
 
 ## Honest scope (v1)
 

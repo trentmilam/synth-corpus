@@ -19,40 +19,20 @@ import os
 import sys
 
 REDTEAM_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SYNTH = os.path.join(os.path.dirname(REDTEAM_ROOT), "synth-corpus")
 # Appended at the END of sys.path (never index 0): a sibling directory
 # resolved purely by relative disk position must never get import priority
 # over anything already trusted on the path.
 sys.path.append(REDTEAM_ROOT)
-sys.path.append(SYNTH)
 
+from redteam.verify import (                       # noqa: E402
+    run_redteam,
+    detect_arithmetic,
+    detect_contradictions,
+)
+from redteam.baseline import naive_verify          # noqa: E402
+from synth_corpus_bootstrap import bootstrap_synth_corpus  # noqa: E402
 
-def _assert_synthfin_identity(mod) -> None:
-    """Fail loudly if whatever landed in ../synth-corpus isn't the expected
-    package -- it is resolved by relative disk position, not a pinned or
-    verified install, so it gets no benefit of the doubt."""
-    doc = mod.__doc__ or ""
-    if "synthetic financial corpus generator" not in doc or not hasattr(mod, "generate"):
-        raise RuntimeError(
-            "the 'synthfin' module found on sys.path does not match the expected "
-            "companion synth-corpus package (identity check failed) -- refusing "
-            "to run against an unverified sibling directory"
-        )
-
-
-try:
-    from redteam.verify import (                       # noqa: E402
-        run_redteam,
-        detect_arithmetic,
-        detect_contradictions,
-    )
-    from redteam.baseline import naive_verify          # noqa: E402
-    import synthfin                                     # noqa: E402
-    from synthfin.generate import generate             # noqa: E402
-except ImportError as exc:
-    raise RuntimeError("clone synth-corpus as a sibling directory: see README Setup") from exc
-
-_assert_synthfin_identity(synthfin)
+synthfin, generate = bootstrap_synth_corpus(REDTEAM_ROOT)
 
 SEEDS = [12345, 4242, 71]
 _MAP = {"contradiction": "contradiction", "ungrounded_claim": "unsupported_claim", "arithmetic_error": "arithmetic"}

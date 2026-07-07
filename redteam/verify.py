@@ -12,9 +12,12 @@ Expected `docs` schema
 document names (not all are required -- see per-check notes below): `ppm`,
 `lpa`, `ddq`, `adv`, `k1`, `capital_account`, `ic_memo`.
 
-- `detect_contradictions` scans EVERY document for any line that starts with
-  one of the canonical figure labels in `LABELS` below (exact strings,
-  including the trailing colon); a contradiction only fires once the SAME
+- `detect_contradictions` scans EVERY document for any line whose text before
+  the first colon names one of the canonical figure labels in `LABELS` below.
+  Matching is case-insensitive and tolerant of whitespace, punctuation, and
+  word order (e.g. "Fund Size / Total Commitments:" and "total commitments
+  (fund size):" both resolve to the same canonical label) -- but not of
+  genuinely different wording. A contradiction only fires once the SAME
   label is found with DIFFERENT values in >=2 documents.
 - `detect_unsupported_returns` only reads `docs["ic_memo"]`.
 - `detect_arithmetic` requires `docs["capital_account"]` to contain all five
@@ -37,8 +40,10 @@ Verdict semantics (`run_redteam`)
   was fully verified.
 
 The returned dict also carries a `coverage` field recording which canonical
-labels were actually located (and in which documents), so a caller can tell
-"checked, clean" apart from "couldn't check" at a glance.
+labels were actually located (and in which documents) and which were not
+located in any document at all, so a caller can tell "checked, clean" apart
+from "couldn't check" at a glance. Check `coverage["labels_not_located"]`
+before trusting a `proceed` verdict.
 """
 from __future__ import annotations
 
@@ -109,19 +114,23 @@ def validate_docs(docs) -> None:
             raise ValueError(f"document {name!r} exceeds size cap ({len(text)} > {MAX_DOC_CHARS} chars)")
 
 
+def _extract_value(text: str):
+    """Money or percent value found anywhere in `text`."""
+    m = _MONEY.search(text)
+    if m:
+        num = float(m.group(2).replace(",", ""))
+        return -num if m.group(1) == "-" else num
+    m = _PCT.search(text)
+    if m:
+        return float(m.group(1))
+    return None
+
+
 def _value_after(line: str, label: str):
     i = line.find(label)
     if i < 0:
         return None
-    rest = line[i + len(label):]
-    m = _MONEY.search(rest)
-    if m:
-        num = float(m.group(2).replace(",", ""))
-        return -num if m.group(1) == "-" else num
-    m = _PCT.search(rest)
-    if m:
-        return float(m.group(1))
-    return None
+    return _extract_value(line[i + len(label):])
 
 
 def _labeled_value(text: str, label: str):
@@ -130,6 +139,34 @@ def _labeled_value(text: str, label: str):
         if line.strip().startswith(label):
             return _value_after(line.strip(), label)
     return None
+
+
+def _normalize_label_tokens(text: str) -> frozenset:
+    """Lowercase, punctuation-stripped word-token set for a label, used to
+    recognize the SAME canonical figure across case/whitespace/word-order
+    variance -- e.g. "TOTAL COMMITMENTS (FUND SIZE):" and "Fund Size / Total
+    Commitments:" both denote the canonical "Total commitments (fund size):"
+    label -- while leaving genuinely different labels un-matched (no two of
+    the `LABELS` below share a token set)."""
+    return frozenset(re.findall(r"[a-z0-9]+", text.lower()))
+
+
+# canonical label token-set -> canonical label string, built once so
+# `_match_canonical_label` doesn't recompute it per line.
+_LABEL_TOKENS = {_normalize_label_tokens(lbl): lbl for lbl in LABELS}
+
+
+def _match_canonical_label(line: str):
+    """If `line`'s text before its first ':' names one of the canonical
+    `LABELS` -- allowing case, whitespace, punctuation, and word-order
+    variance -- return `(canonical_label, value_text)`, where `value_text` is
+    everything after that colon. Returns `None` if no canonical label is
+    recognized."""
+    head, sep, tail = line.partition(":")
+    if not sep:
+        return None
+    lbl = _LABEL_TOKENS.get(_normalize_label_tokens(head))
+    return (lbl, tail) if lbl else None
 
 
 def _fmt(v: float, lbl: str) -> str:
@@ -152,18 +189,19 @@ def _figures(docs: dict) -> dict:
     out = {lbl: {} for lbl in LABELS}
     for name, text in docs.items():
         for line in text.splitlines():
-            s = line.strip()
-            for lbl in LABELS:
-                if s.startswith(lbl):
-                    v = _value_after(s, lbl)
-                    if v is not None:
-                        if name in out[lbl] and out[lbl][name] != v:
-                            raise ValueError(
-                                f"document {name!r} states {lbl!r} more than once with "
-                                f"different values ({out[lbl][name]!r} and {v!r}); each "
-                                "canonical label must appear at most once per document"
-                            )
-                        out[lbl][name] = v
+            match = _match_canonical_label(line.strip())
+            if match is None:
+                continue
+            lbl, rest = match
+            v = _extract_value(rest)
+            if v is not None:
+                if name in out[lbl] and out[lbl][name] != v:
+                    raise ValueError(
+                        f"document {name!r} states {lbl!r} more than once with "
+                        f"different values ({out[lbl][name]!r} and {v!r}); each "
+                        "canonical label must appear at most once per document"
+                    )
+                out[lbl][name] = v
     return out
 
 
@@ -203,16 +241,22 @@ def detect_contradictions(docs: dict) -> list:
 
 
 def detect_unsupported_returns(docs: dict) -> list:
-    """A rate-of-return (IRR / annualized return) assertion in the IC memo cannot
-    be substantiated by an alternatives data room (which carries no dated cash
-    flows) -> unverifiable."""
+    """Flag every rate-of-return (IRR / annualized return) assertion in the IC
+    memo for manual review. This does NOT check whether the figure is
+    substantiated elsewhere in the data room -- v1 has no dated-cash-flow
+    model to check it against, so it flags every such assertion
+    unconditionally rather than silently passing any of them."""
     findings = []
     for line in docs.get("ic_memo", "").splitlines():
         m = _RETURN.search(line)
         if m:
             findings.append({
                 "type": "unsupported_claim", "doc": "ic_memo", "field": "return_claim",
-                "detail": f"asserts a rate of return ({m.group(3)}%) with no dated cash flows in the data room to substantiate it",
+                "detail": (
+                    f"rate-of-return assertion found ({m.group(3)}%); flagged for manual "
+                    "review -- v1 does not check whether it is substantiated elsewhere "
+                    "in the data room, it flags every such assertion"
+                ),
                 "citation": f"ic_memo: {line.strip()}",
             })
     return findings
@@ -271,9 +315,13 @@ def run_redteam(corpus_or_docs) -> dict:
     else:
         verdict = "proceed"
 
+    figures = _figures(docs)
     coverage = {
         "capital_account_fields_found": ca_coverage["found"],
         "capital_account_fields_missing": ca_coverage["missing"],
-        "labels_located": {lbl: sorted(per_doc) for lbl, per_doc in _figures(docs).items() if per_doc},
+        # every canonical LABEL, always present -- an empty list means it was
+        # not found in ANY document, not merely "omitted from this dict".
+        "labels_located": {lbl: sorted(per_doc) for lbl, per_doc in figures.items()},
+        "labels_not_located": [lbl for lbl, per_doc in figures.items() if not per_doc],
     }
     return {"verdict": verdict, "findings": findings, "coverage": coverage}
