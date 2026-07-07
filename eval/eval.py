@@ -1,7 +1,15 @@
 """redteam-desk eval -- score the red-team against synth-corpus's labeled ground
 truth across seeds. Exits 0 on thresholds.
 
+This is the FULL REPRODUCTION path and requires the companion `synth-corpus`
+repo cloned as a sibling directory (see README "Full reproduction"):
+
+    git clone https://github.com/trentmilam/synth-corpus ../synth-corpus
     python eval/eval.py
+
+For a zero-dependency example that needs nothing but this repo, see the
+README Quickstart (calls `redteam.verify.run_redteam` directly on an inline
+`docs` dict) or `tests/test_verify.py` (pytest, no synth-corpus required).
 
 Independent detectors vs an independently-generated answer key -> an honest score:
 clean packets raise NO findings (no false positives); flawed packets catch every
@@ -12,18 +20,41 @@ import sys
 
 REDTEAM_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SYNTH = os.path.join(os.path.dirname(REDTEAM_ROOT), "synth-corpus")
-sys.path.insert(0, REDTEAM_ROOT)
-sys.path.insert(0, SYNTH)
+# Appended at the END of sys.path (never index 0): a sibling directory
+# resolved purely by relative disk position must never get import priority
+# over anything already trusted on the path.
+sys.path.append(REDTEAM_ROOT)
+sys.path.append(SYNTH)
 
-from redteam.verify import (                       # noqa: E402
-    run_redteam,
-    detect_arithmetic,
-    detect_contradictions,
-)
-from redteam.baseline import naive_verify          # noqa: E402
-from synthfin.generate import generate            # noqa: E402
 
-SEEDS = [20260704, 4242, 71]
+def _assert_synthfin_identity(mod) -> None:
+    """Fail loudly if whatever landed in ../synth-corpus isn't the expected
+    package -- it is resolved by relative disk position, not a pinned or
+    verified install, so it gets no benefit of the doubt."""
+    doc = mod.__doc__ or ""
+    if "synthetic financial corpus generator" not in doc or not hasattr(mod, "generate"):
+        raise RuntimeError(
+            "the 'synthfin' module found on sys.path does not match the expected "
+            "companion synth-corpus package (identity check failed) -- refusing "
+            "to run against an unverified sibling directory"
+        )
+
+
+try:
+    from redteam.verify import (                       # noqa: E402
+        run_redteam,
+        detect_arithmetic,
+        detect_contradictions,
+    )
+    from redteam.baseline import naive_verify          # noqa: E402
+    import synthfin                                     # noqa: E402
+    from synthfin.generate import generate             # noqa: E402
+except ImportError as exc:
+    raise RuntimeError("clone synth-corpus as a sibling directory: see README Setup") from exc
+
+_assert_synthfin_identity(synthfin)
+
+SEEDS = [12345, 4242, 71]
 _MAP = {"contradiction": "contradiction", "ungrounded_claim": "unsupported_claim", "arithmetic_error": "arithmetic"}
 INJECTS = [
     {"type": "contradiction", "doc": "ddq", "field": "management_fee"},
@@ -93,6 +124,45 @@ def main() -> int:
     print(f"[redcase] neg_rollforward_caught={len(detect_arithmetic(neg_broken))} "
           f"neg_clean_findings={len(detect_arithmetic(neg_clean))} "
           f"tie_docs_flagged={sorted({f['doc'] for f in tie})}")
+
+    # (3) MONEY-MAGNITUDE contradiction citations must be human-readable: a
+    #     $500,000,000 vs $450,000,000 fund-size disagreement must render as
+    #     "500,000,000", never Python's scientific-notation "5e+08".
+    money_contra = {
+        "ppm": "Total commitments (fund size): $500,000,000\n",
+        "ddq": "Total commitments (fund size): $450,000,000\n",
+    }
+    money_findings = detect_contradictions(money_contra)
+    # A 2-doc no-majority conflict flags one finding per conflicting doc (same as the
+    # tie case above), so assert on the whole set: none may use scientific notation and
+    # at least one must carry the plain-formatted value.
+    checks["redcase_money_contradiction_not_scientific_notation"] = (
+        len(money_findings) >= 1
+        and any("500,000,000" in f["detail"] for f in money_findings)
+        and all("e+" not in f["detail"].lower() for f in money_findings)
+    )
+
+    # (4) FAIL-OPEN regression: a broken packet whose NAV disagrees with its own
+    #     rollforward, but with the fee label reworded ("Mgmt fees allocated:"
+    #     instead of the canonical "Allocated management fees:"), must NOT be
+    #     indistinguishable from a genuinely clean packet -- the verdict must
+    #     signal insufficient-data, never proceed.
+    broken_reworded_label = {"capital_account": (
+        "Contributions to date: $10,000,000\n"
+        "Allocated net gain: $2,000,000\n"
+        "Mgmt fees allocated: $200,000\n"             # reworded -- won't be recognized
+        "Cumulative distributions: $1,000,000\n"
+        "Ending capital account (NAV): $12,800,000\n"  # overstated by $1.8-2.0M, unchecked
+    )}
+    checks["redcase_reworded_label_is_insufficient_data_not_proceed"] = (
+        run_redteam(broken_reworded_label)["verdict"] == "insufficient-data"
+    )
+    checks["redcase_empty_docs_is_insufficient_data_not_proceed"] = (
+        run_redteam({})["verdict"] == "insufficient-data"
+    )
+    print(f"[redcase] money_contradiction_detail={money_findings[0]['detail']!r} "
+          f"reworded_label_verdict={run_redteam(broken_reworded_label)['verdict']!r} "
+          f"empty_docs_verdict={run_redteam({})['verdict']!r}")
 
     recall = total_hits / total_planted if total_planted else 0.0
     precision = total_hits / total_findings_flawed if total_findings_flawed else 0.0

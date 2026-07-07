@@ -26,6 +26,8 @@ from __future__ import annotations
 
 import re
 
+from .verify import validate_docs
+
 # A reasonable keyword lexicon a first-cut engineer would use for a PE data room.
 # Substring keywords (lowercased), NOT the tool's canonical anchored labels -- this
 # is the naive approximation of the tool's schema-aware parsing.
@@ -105,6 +107,7 @@ def naive_unsupported(docs: dict) -> list:
 def naive_verify(docs) -> dict:
     """The naive baseline verifier. Same return shape as run_redteam."""
     docs = docs.docs if hasattr(docs, "docs") else docs
+    validate_docs(docs)
     findings = naive_contradictions(docs) + naive_unsupported(docs)
     hard = any(f["type"] == "contradiction" for f in findings)
     verdict = "high-risk" if hard else ("caution" if findings else "proceed")

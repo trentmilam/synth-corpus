@@ -1,5 +1,7 @@
 # redteam-desk — an AI decision red-team (advisor second-opinion)
 
+[![eval](https://github.com/trentmilam/redteam-desk/actions/workflows/eval.yml/badge.svg)](https://github.com/trentmilam/redteam-desk/actions/workflows/eval.yml)
+
 Before a high-stakes wealth recommendation is acted on, this adversarially reviews the decision
 packet — the IC-memo recommendation plus its supporting data room — and surfaces integrity problems
 a confident, fluent draft can hide: **cross-document contradictions**, **unsupported performance
@@ -8,13 +10,73 @@ verdict**. Built for the people who protect the wealthy: RIAs, family offices, f
 
 ## Quickstart
 
-```
-python eval/eval.py    # scored vs labeled ground truth
-python run_demo.py     # one worked decision packet
+Zero dependencies — just this repo and the Python standard library:
+
+```python
+from redteam.verify import run_redteam
+
+docs = {
+    "ppm": "Total commitments (fund size): $500,000,000\n",
+    "ddq": "Total commitments (fund size): $450,000,000\n",  # deliberate contradiction
+}
+report = run_redteam(docs)
+print(report["verdict"])     # 'high-risk' -- the two documents disagree
+print(report["findings"])    # each finding carries a `citation` back to the offending doc
 ```
 
-The eval imports the sibling `synth-corpus` generator to build **labeled** flawed decision packets,
-then scores the red-team's *independent* detectors against that answer key.
+Run it: `python -c "from redteam.verify import run_redteam; print(run_redteam({'ppm': 'Total commitments (fund size): \$500,000,000', 'ddq': 'Total commitments (fund size): \$450,000,000'}))"`
+
+## Install
+
+```
+pip install .            # or: pip install -e . for local development
+```
+
+`redteam/` (the package this repo ships) is pure standard library — no required dependencies.
+Requires Python 3.9+ (developed on 3.12, see `.python-version`).
+
+## Input schema
+
+`run_redteam(docs)` takes a `dict[str, str]` mapping a document name to its raw text. Canonical
+document names: `ppm`, `lpa`, `ddq`, `adv`, `k1`, `capital_account`, `ic_memo` (not all required —
+see below). Full schema and per-check requirements are documented in `redteam/verify.py`'s module
+docstring; in short:
+
+- **Contradictions** are found by scanning every document for lines starting with one of the
+  canonical labels in `redteam.verify.LABELS` (exact strings, e.g. `"Management fee:"`) — a
+  contradiction fires when the same label carries different values in ≥2 documents.
+- **Arithmetic** reconstructs the capital-account rollforward from `docs["capital_account"]`,
+  which must contain all five labels in `redteam.verify.CAPITAL_ACCOUNT_LABELS`, each starting its
+  own line, verbatim — a reworded label is not recognized.
+- **Verdict** is `high-risk` (a contradiction or arithmetic break), `caution` (only an unsupported
+  claim), `insufficient-data` (nothing was found wrong, but the capital-account rollforward could
+  not be verified — a required label was missing or unmatched), or `proceed` (checked, and it's
+  clean). `insufficient-data` is deliberately distinct from `proceed`: "nothing was checked" must
+  never render identically to "checked, and it's fine."
+
+## Full reproduction (requires the companion synth-corpus repo)
+
+The Quickstart above needs nothing beyond this repo. The measured recall/precision numbers below,
+and the worked demo, additionally use a companion project, [`synth-corpus`][synth-corpus], to
+generate **labeled** decision packets with planted, known flaws — so the score is honest (the
+answer key and the detectors are independent code, not a checker grading itself).
+
+[synth-corpus]: https://github.com/trentmilam/synth-corpus
+
+```
+git clone https://github.com/trentmilam/redteam-desk
+git clone https://github.com/trentmilam/synth-corpus
+# the two repos must sit as siblings:
+#   some-dir/redteam-desk
+#   some-dir/synth-corpus
+cd redteam-desk
+pip install numpy          # synth-corpus's only dependency
+python run_demo.py         # one worked decision packet
+python eval/eval.py        # scored vs labeled ground truth
+```
+
+If `synth-corpus` isn't present at `../synth-corpus`, both scripts raise a clear
+`RuntimeError` telling you to clone it, instead of a raw traceback.
 
 ## Measured (eval.py, exit 0)
 
@@ -43,9 +105,8 @@ apart from an unbacked IRR claim. The gap is asserted by the eval, not just prin
 
 ## How it works
 
-Follows the validated FinGround-style blueprint — atomic claims → verdict {supported / contradicted /
-unverifiable} + formula reconstruction — implemented as three **deterministic** detectors
-(`redteam/verify.py`):
+Each claim resolves to a verdict — supported / contradicted / unverifiable — with a reconstructed
+formula where applicable, implemented as three **deterministic** detectors (`redteam/verify.py`):
 
 - **contradiction** — the same labeled figure carries different values across documents (docs disagree
   with *each other*; the minority doc is flagged);
@@ -53,8 +114,8 @@ unverifiable} + formula reconstruction — implemented as three **deterministic*
   room cannot substantiate (no dated cash flows);
 - **arithmetic** — the capital-account rollforward is re-derived and must sum to the stated NAV.
 
-`run_redteam(corpus) -> {verdict, findings[]}`; verdict is `high-risk` (a contradiction or arithmetic
-error), `caution` (an unsupported claim), or `proceed`.
+`run_redteam(docs) -> {verdict, findings[], coverage}`; see [Input schema](#input-schema) above for
+verdict semantics.
 
 ## Why deterministic
 
@@ -72,6 +133,12 @@ with FINRA Rule 3110 supervision — a human stays in the loop).
 
 ## Where it fits
 
-The capstone of the wealth-tech track: it consumes `synth-corpus`'s labeled packets and is
-scored against their ground truth, applying the same citation-gating integrity discipline
-throughout — every finding tied to a document+line reference, never an LLM's unverified say-so.
+This tool consumes decision packets — either your own, in the `docs` dict shape described above, or
+the labeled packets generated by the companion [`synth-corpus`][synth-corpus] project — and is scored
+against synth-corpus's ground truth when reproducing the measured numbers above. It applies the same
+citation-gating discipline throughout: every finding ties to a document+line reference, never an
+LLM's unverified say-so.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). Changes are tracked in [CHANGELOG.md](CHANGELOG.md).
