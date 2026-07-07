@@ -8,11 +8,13 @@ so any downstream tool can be scored against known truth. Deterministic + offlin
 ## Quickstart
 
 ```
-python eval/eval.py     # 23/23 checks, exit 0
+pip install -e .
+python eval/eval.py     # 31/31 checks, exit 0
 python run_demo.py      # writes out/clean + out/flawed
 ```
 
-Only dependency is numpy (seeded). Documents are templated markdown; the manifest is JSON.
+Only dependency is numpy (seeded), pinned in `pyproject.toml` (`numpy>=1.24,<3`). Documents are
+templated markdown; the manifest is JSON.
 
 ## What it produces
 
@@ -38,11 +40,15 @@ findings = check_consistency(c.docs, build_world(20260704))   # structural detec
 answer_key = c.manifest["flaws"]                              # ground truth to score against
 ```
 
-## Measured (eval.py, exit 0 — 23/23)
+## Measured (eval.py, exit 0 — 31/31)
 
-Clean corpus ties out (0 findings, 0 flaws, arithmetic ties, all 7 docs present); injected flaws are
-labeled AND detected at exactly their locations (`contradiction_labels_match_detections`); generation
-is reproducible (same seed+injects → byte-identical docs + manifest).
+Clean corpus ties out (0 findings, 0 flaws, arithmetic ties, all 7 docs present) and injected flaws are
+labeled AND detected at exactly their locations (`contradiction_labels_match_detections`) — checked
+across a **201-seed range**, including 21 seeds with a negative `lp_allocated_gain` (a fund posting a
+loss renders e.g. `"Allocated net gain: $-2,650,000"`), not just one hand-picked seed. Every canonical
+figure (`management_fee`, `carried_interest`, `hurdle`, `fund_size`, `lp_commitment`, `distributions`,
+`ending_nav`) has its own contradiction-detection round trip. Generation is reproducible (same
+seed+injects → byte-identical docs + manifest).
 
 ### World-free detector vs a naive baseline (measured head-to-head)
 
@@ -80,6 +86,10 @@ hedge-fund and VC worlds via new world states + renderers.
 
 ## Where it fits
 
-The test-harness foundation for the wealth-tech track (consilium, the decision red-team redteam-desk,
-and the BD-APP graph-RAG defense) — it supplies labeled corpora with known answers so those tools can
-be built and scored honestly.
+A test-harness foundation for downstream tools that need labeled corpora with known answers to be
+built and scored honestly — for example, a decision red-team, or a document-grounding defense for a
+RAG system.
+
+## License
+
+MIT — see [LICENSE](LICENSE).

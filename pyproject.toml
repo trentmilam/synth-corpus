@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "synth-corpus"
+version = "0.1.0"
+description = "Synthetic financial corpus generator with a ground-truth answer key (labeled test harness)."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.9"
+dependencies = [
+    "numpy>=1.24,<3",
+]
+
+[tool.setuptools]
+packages = ["synthfin"]

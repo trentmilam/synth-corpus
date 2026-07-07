@@ -32,7 +32,7 @@ FIELDS = {
     "ending_nav": (LBL_ENDING_NAV, ["k1", "capital_account"], lambda w: w.ending_nav, _MONEY),
 }
 
-_MONEY_RE = re.compile(r"\$\s*([\d,]+(?:\.\d+)?)")
+_MONEY_RE = re.compile(r"\$\s*(-?[\d,]+(?:\.\d+)?)")
 _PCT_RE = re.compile(r"([\d.]+)\s*%")
 
 
