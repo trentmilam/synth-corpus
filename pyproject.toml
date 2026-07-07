@@ -13,5 +13,9 @@ dependencies = [
     "numpy>=1.24,<3",
 ]
 
+[project.scripts]
+synthfin-demo = "synthfin.cli:demo_main"
+synthfin-eval = "synthfin.cli:eval_main"
+
 [tool.setuptools]
 packages = ["synthfin"]

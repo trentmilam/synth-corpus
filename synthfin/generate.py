@@ -11,7 +11,10 @@ from .inject import apply_injects
 @dataclass
 class Corpus:
     docs: dict                       # {name: text}
-    manifest: dict                   # {seed, world, flaws}
+    manifest: dict                   # {seed, world, flaws} -- manifest["world"] is a plain
+                                      # World.summary() dict (display data, not a World instance);
+                                      # pass the Corpus, manifest, or manifest["world"] directly to
+                                      # check_consistency() to re-score safely (see README).
 
 
 def generate(seed: int = 20260704, injects=None) -> Corpus:

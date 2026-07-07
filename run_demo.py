@@ -38,7 +38,7 @@ def main() -> int:
     clean = generate(SEED)
     base = write_corpus(clean, "clean")
     print(f"\nCLEAN corpus -> {base}  ({len(clean.docs)} docs)")
-    print(f"  consistency findings: {len(check_consistency(clean.docs, world))}  (expect 0)")
+    print(f"  consistency findings: {len(check_consistency(clean))}  (expect 0)")
 
     injects = [
         {"type": "contradiction", "doc": "ddq", "field": "management_fee"},
@@ -47,7 +47,7 @@ def main() -> int:
     ]
     flawed = generate(SEED, injects=injects)
     base = write_corpus(flawed, "flawed")
-    findings = check_consistency(flawed.docs, world)
+    findings = check_consistency(flawed)
     print(f"\nFLAWED corpus -> {base}  ({len(flawed.manifest['flaws'])} injected flaws)")
     print("  answer key:")
     for f in flawed.manifest["flaws"]:

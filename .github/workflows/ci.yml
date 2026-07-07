@@ -9,22 +9,22 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.11"]
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: ${{ matrix.python-version }}
 
       - name: Install (editable)
-        run: pip install -e .
+        run: pip install -e . pytest
 
       - name: Run eval.py and verify the README's claimed numbers
         run: |
           python eval/eval.py | tee eval_output.txt
           grep -q "RESULT: PASS" eval_output.txt
-          grep -q "(31/31 checks)" eval_output.txt
+          grep -q "(36/36 checks)" eval_output.txt
           grep -q "precision gap (worldfree - naive): 0.636" eval_output.txt
 
       - name: Run run_demo.py
@@ -32,3 +32,6 @@ jobs:
           python run_demo.py | tee demo_output.txt
           grep -q "CLEAN corpus" demo_output.txt
           grep -q "FLAWED corpus" demo_output.txt
+
+      - name: Run pytest suite
+        run: pytest -q

@@ -9,7 +9,14 @@ All notable changes to this project are documented in this file.
 - Labeled flaw injection: `contradiction`, `arithmetic_error`, `ungrounded_claim`.
 - Oracle consistency checker (`check_consistency`) plus two world-free detectors (`detect_naive`,
   `detect_worldfree`) scored against the labeled answer key.
-- `eval/eval.py` regression suite (31 checks) covering a 201-seed range, including seeds with a
+- `eval/eval.py` regression suite (36 checks) covering a 201-seed range, including seeds with a
   negative `lp_allocated_gain`, plus a measured naive-vs-worldfree precision head-to-head.
 - Packaging via `pyproject.toml` (`pip install -e .`); CI runs `eval/eval.py` and `run_demo.py` on
   every push/PR and greps stdout for the numbers this README quotes.
+- `check_consistency()` gains a mismatch-proof one-argument form — `check_consistency(corpus)` —
+  that rebuilds the world from the corpus's own recorded seed (it also accepts a `Corpus`/manifest
+  as the `world` argument). A provable seed mismatch raises `ValueError`; the unverifiable bare
+  `(docs, world)` form emits a `UserWarning` every time instead of silently returning fabricated
+  findings.
+- `pytest`-discoverable `tests/`, `console_scripts` entry points (`synthfin-demo`, `synthfin-eval`),
+  and a CI matrix across Python 3.9–3.12.

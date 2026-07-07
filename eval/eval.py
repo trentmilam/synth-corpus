@@ -15,6 +15,7 @@ produce a negative `lp_allocated_gain` (see SEED_RANGE below).
 import json
 import os
 import sys
+import warnings
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
@@ -22,7 +23,7 @@ sys.path.insert(0, ROOT)
 from synthfin.generate import generate            # noqa: E402
 from synthfin.check import (                        # noqa: E402
     check_consistency, detect_worldfree, detect_naive, FIELDS,
-    _value_after_label, _MONEY, LBL_ALLOC_GAIN,
+    value_after_label, MONEY, LBL_ALLOC_GAIN,
 )
 from synthfin.world import build_world             # noqa: E402
 
@@ -92,10 +93,8 @@ def main() -> int:
     ]
 
     for s in SEED_RANGE:
-        world_s = build_world(s)
-
         clean_s = generate(s)
-        clean_findings_s = check_consistency(clean_s.docs, world_s)
+        clean_findings_s = check_consistency(clean_s)   # one-arg Corpus form: world derived from seed
         cross_doc_consistency_all &= len(clean_findings_s) == 0
         no_false_flaws_all &= clean_s.manifest["flaws"] == []
         arithmetic_correct_clean_all &= not any(f["type"] == "arithmetic" for f in clean_findings_s)
@@ -104,7 +103,7 @@ def main() -> int:
 
         flawed_s = generate(s, injects=base_injects)
         flaws_s = flawed_s.manifest["flaws"]
-        findings_s = check_consistency(flawed_s.docs, world_s)
+        findings_s = check_consistency(flawed_s)
 
         injection_count_all &= len(flaws_s) == 3
         flaws_well_formed_all &= all(
@@ -141,20 +140,66 @@ def main() -> int:
     # (1) the money regex must PARSE a negative rendered figure, not silently return
     #     None, for every negative-gain seed in the range.
     checks["money_regex_parses_negative_values"] = all(
-        _value_after_label(generate(s).docs["capital_account"], LBL_ALLOC_GAIN, _MONEY)
+        value_after_label(generate(s).docs["capital_account"], LBL_ALLOC_GAIN, MONEY)
         == build_world(s).lp_allocated_gain
         for s in neg_gain_seeds)
     # (2) direct repro of the originally-reported bug: seed=4, truth=-600000, an
     #     arithmetic_error whose rendered result STAYS negative ($-100,000) -- before
     #     the fix this was silently skipped (empty findings); now it must be caught.
-    neg_world = build_world(4)
     neg_flawed = generate(4, injects=[{"type": "arithmetic_error", "delta": 500_000}])
-    neg_findings = check_consistency(neg_flawed.docs, neg_world)
+    neg_findings = check_consistency(neg_flawed)   # one-arg Corpus form
     checks["detect_arithmetic_negative_rendered_value"] = any(
         f["type"] == "arithmetic" and f["doc"] == "capital_account" for f in neg_findings)
 
     # --- single-seed (SEED) checks below: no-op rejection, head-to-head, determinism ---
     world = build_world(SEED)
+
+    # --- check_consistency seed-pairing safety -----------------------------------------
+    mismatched = generate(SEED, injects=[{"type": "contradiction", "doc": "ddq", "field": "management_fee"}])
+    wrong_world = build_world(999)
+
+    def _expected_finding(findings) -> bool:
+        return (len(findings) == 1 and findings[0]["type"] == "contradiction"
+                and findings[0]["doc"] == "ddq" and findings[0]["field"] == "management_fee")
+
+    # (a) Corpus + an explicitly WRONG World -> a seed is recoverable from both sides,
+    #     so the mismatch is provable and MUST raise (never a fabricated finding set).
+    def _raises_on_seed_mismatch() -> bool:
+        try:
+            check_consistency(mismatched, wrong_world)
+        except ValueError:
+            return True
+        return False
+
+    checks["seed_mismatch_raises"] = _raises_on_seed_mismatch()
+
+    # (b) The exact bug repro: a bare docs dict (no seed) + a wrong World. The
+    #     pairing is unverifiable, so this must emit a loud UserWarning EVERY time --
+    #     it must NOT silently return a fabricated finding set (the original P0 bug).
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        _ = check_consistency(mismatched.docs, build_world(999))
+    checks["bare_dict_pairing_warns"] = any(
+        issubclass(w.category, UserWarning) for w in caught)
+
+    # (c) The mismatch-proof safe form: one-arg Corpus derives the world from the corpus's
+    #     own seed -- finds exactly the one real contradiction and emits NO warning.
+    with warnings.catch_warnings(record=True) as caught_safe:
+        warnings.simplefilter("always")
+        safe_findings = check_consistency(mismatched)
+    checks["onearg_corpus_safe_rescoring"] = (
+        _expected_finding(safe_findings) and not caught_safe)
+
+    # (d) A persist-manifest-then-reload round trip stays safe: the reloaded manifest dict
+    #     (a JSON round trip, exactly like writing manifest.json and reading it back) is
+    #     passed as `world` alongside the Corpus, so both seeds are cross-checked (no warn,
+    #     no raise) and it reaches the identical correct finding set.
+    reloaded_manifest = json.loads(json.dumps(mismatched.manifest))
+    with warnings.catch_warnings(record=True) as caught_manifest:
+        warnings.simplefilter("always")
+        manifest_findings = check_consistency(mismatched, reloaded_manifest)
+    checks["safe_manifest_reload_rescoring"] = (
+        manifest_findings == safe_findings and not caught_manifest)
 
     # --- answer-key integrity: no-op injects must be REJECTED, not recorded as flaws ---
     # (red-cases: each of these previously recorded a ground-truth flaw for a defect that
@@ -181,7 +226,7 @@ def main() -> int:
 
     # green: a valid contradiction on the SAME field/doc still records + is detectable (fix is not over-broad)
     valid = generate(SEED, injects=[{"type": "contradiction", "doc": "ddq", "field": "management_fee"}])
-    valid_findings = check_consistency(valid.docs, world)
+    valid_findings = check_consistency(valid)   # one-arg Corpus form
     checks["valid_contradiction_still_records"] = len(valid.manifest["flaws"]) == 1
     # every recorded flaw of a checker-visible type is REAL (detected at its labeled location)
     checks["every_recorded_flaw_is_detectable"] = all(
@@ -198,7 +243,7 @@ def main() -> int:
     ):
         assert field_key in FIELDS, f"FIELDS is missing {field_key!r}"
         rt = generate(SEED, injects=[{"type": "contradiction", "doc": target_doc, "field": field_key}])
-        rt_findings = check_consistency(rt.docs, world)
+        rt_findings = check_consistency(rt)   # one-arg Corpus form
         checks[f"detect_contradiction_{field_key}"] = any(
             f["type"] == "contradiction" and f["doc"] == target_doc and f["field"] == field_key
             for f in rt_findings)
@@ -223,7 +268,7 @@ def main() -> int:
     ab = generate(SEED, injects=ab_injects)
     ab_flaws = ab.manifest["flaws"]
 
-    oracle_find = check_consistency(ab.docs, world)     # reads world (reference oracle)
+    oracle_find = check_consistency(ab)                 # reads world (reference oracle, one-arg form)
     wf_find = detect_worldfree(ab.docs)                 # world-free
     naive_find = detect_naive(ab.docs)                  # world-free, naive baseline
 
@@ -242,6 +287,17 @@ def main() -> int:
     checks["naive_overflags"] = naive["fp"] > 0 and wf["fp"] == 0
     checks["worldfree_beats_naive_precision"] = wf["precision"] > naive["precision"]
 
+    # --- Exercise detect_worldfree's "no majority -> flag both" branch (2-doc tie) ---
+    # `hurdle` is the only FIELDS entry carried by exactly 2 documents (ppm, lpa), so a
+    # contradiction on it produces a genuine 1-vs-1 tie with no majority to arbitrate --
+    # the documented fallback branch that no other check in this file exercises.
+    two_doc = generate(SEED, injects=[{"type": "contradiction", "doc": "ppm", "field": "hurdle"}])
+    two_doc_wf = detect_worldfree(two_doc.docs)
+    checks["worldfree_two_doc_tie_flags_both"] = {
+        (f["doc"], f["field"]) for f in two_doc_wf
+        if f["type"] == "contradiction" and f["field"] == "hurdle"
+    } == {("ppm", "hurdle"), ("lpa", "hurdle")}
+
     print("\n=== MEASURED head-to-head (world-free detectors vs labeled answer key) ===")
     print(f"{'detector':<22}{'P':>8}{'R':>8}{'F1':>8}{'TP':>5}{'FP':>5}{'FN':>5}")
     for nm, m in (("oracle (reads world)", oracle), ("worldfree (no world)", wf),
@@ -258,7 +314,7 @@ def main() -> int:
     checks["determinism_manifest"] = json.dumps(a.manifest, sort_keys=True) == json.dumps(b.manifest, sort_keys=True)
 
     demo_flaws = a.manifest["flaws"]
-    demo_findings = check_consistency(a.docs, world)
+    demo_findings = check_consistency(a)   # one-arg Corpus form
 
     print("=== synth-corpus checks (measured) ===")
     for k, v in checks.items():

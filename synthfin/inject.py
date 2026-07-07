@@ -8,6 +8,11 @@ downstream tool can be scored against ground truth. Supported:
                          leave the stated NAV) so it no longer sums.
 * ``ungrounded_claim``-- append a claim to the IC memo asserting a metric absent from
                          the data room (nothing in the corpus supports it).
+
+Vocabulary note: this module's answer key records a broken rollforward as flaw type
+``"arithmetic_error"``, while `check.py`'s detectors report the same defect class as
+finding type ``"arithmetic"``. This split is intentional and NOT unified -- see
+`check.py`'s module docstring and the README for the mapping a downstream caller needs.
 """
 from __future__ import annotations
 
@@ -43,8 +48,16 @@ def apply_injects(docs: dict, world, injects: list):
         typ = inj["type"]
 
         if typ == "contradiction":
+            if "doc" not in inj:
+                raise ValueError(f"contradiction inject missing required key 'doc': {inj!r}")
+            if "field" not in inj:
+                raise ValueError(f"contradiction inject missing required key 'field': {inj!r}")
             doc = inj["doc"]
             field = inj["field"]
+            if field not in FIELDS:
+                raise ValueError(f"unknown field {field!r}; must be one of {sorted(FIELDS)}")
+            if doc not in docs:
+                raise ValueError(f"unknown doc {doc!r}; must be one of {sorted(docs)}")
             label, _docs, truth_fn, kind = FIELDS[field]
             truth = float(truth_fn(world))
             injected = float(inj.get("value", _wrong(truth, kind)))
