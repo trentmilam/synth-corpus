@@ -5,7 +5,7 @@ All notable changes to this project are documented in this file.
 ## [Unreleased]
 
 ### Fixed
-- **Contradiction detection false negative**: `detect_contradictions`/`_figures` now match canonical
+- Contradiction detection false negative: `detect_contradictions`/`_figures` now match canonical
   figure labels case-insensitively and tolerant of whitespace/punctuation/word-order variance (e.g.
   "Fund Size / Total Commitments:" and "total commitments (fund size):" now resolve to the same
   label), instead of requiring byte-identical label text. A contradiction phrased differently in
@@ -41,7 +41,8 @@ All notable changes to this project are documented in this file.
 - Input validation (`validate_docs`) at the `run_redteam`/`naive_verify` entrypoints.
 
 ### Fixed
-- **Fail-open verdict**: a broken or empty decision packet no longer returns the same
+- Fail-open verdict (silently treating a broken input as if it had passed, instead of flagging the
+  failure): a broken or empty decision packet no longer returns the same
   `{'verdict': 'proceed', 'findings': []}` as a genuinely clean one.
 - Money-valued contradiction citations (fund size, LP commitment, distributions, NAV) now render
   with thousands separators (`500,000,000`) instead of scientific notation (`5e+08`).
