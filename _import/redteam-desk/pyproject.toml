@@ -1,0 +1,23 @@
+[project]
+name = "redteam-desk"
+version = "0.1.0"
+description = "Deterministic red-team detectors for decision-packet integrity: cross-document contradictions, unsupported performance claims, and arithmetic errors, each citation-gated."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.9"
+authors = [{ name = "Trent Milam" }]
+dependencies = []
+
+# The eval/demo scripts (eval/eval.py, run_demo.py) additionally require the
+# companion synth-corpus project (a sibling checkout, see README) and numpy,
+# but the redteam/ package itself is pure standard library with zero
+# required dependencies.
+[project.optional-dependencies]
+test = ["pytest"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["redteam*"]
