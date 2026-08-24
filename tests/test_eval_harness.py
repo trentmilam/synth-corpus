@@ -1,7 +1,7 @@
 """pytest-discoverable wrapper around `eval/eval.py` and `run_demo.py`.
 
 `eval/eval.py` is the canonical, hand-rolled harness (exit-code + print
-asserts; currently 35 checks across a 201-seed sweep) -- this file makes it
+asserts; currently 36 checks across a 201-seed sweep) -- this file makes it
 visible to `pytest -k`, `coverage.py`, and IDE test runners without
 duplicating its logic.
 """
