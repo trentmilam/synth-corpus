@@ -33,5 +33,23 @@ jobs:
           grep -q "CLEAN corpus" demo_output.txt
           grep -q "FLAWED corpus" demo_output.txt
 
+      # The checker that is scored against this corpus lives here too, so it is
+      # exercised on the same run rather than in a separate repo that checked this
+      # one out at a pinned tag. grep the headline numbers so a silent regression
+      # to 0 findings cannot pass as green.
+      - name: Run the red-team eval against the generated corpus
+        run: |
+          python eval/eval_redteam.py | tee redteam_output.txt
+          grep -q "RESULT: PASS" redteam_output.txt
+          grep -q "recall=1.000  precision=1.000" redteam_output.txt
+
+      - name: Run run_redteam_demo.py
+        run: |
+          python run_redteam_demo.py | tee redteam_demo.txt
+          grep -q "Score vs answer key" redteam_demo.txt
+
+      - name: Fail if the README's head-to-head table drifted from the eval
+        run: python scripts/check_readme_numbers.py
+
       - name: Run pytest suite
         run: pytest -q

@@ -1,7 +1,7 @@
 """Guard against README.md's head-to-head baseline table drifting away from
-`eval/eval.py`'s actual output.
+`eval/eval_redteam.py`'s actual output.
 
-Runs `eval/eval.py` fresh, parses its printed HEAD-TO-HEAD numbers, parses
+Runs `eval/eval_redteam.py` fresh, parses its printed HEAD-TO-HEAD numbers, parses
 the README's checked-in table, and fails (non-zero exit) if they don't match
 exactly. Run locally after any change that could move the numbers, or in CI
 on every push/PR -- this is what should have caught the numbers going stale
@@ -18,7 +18,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 README = ROOT / "README.md"
-EVAL_SCRIPT = ROOT / "eval" / "eval.py"
+EVAL_SCRIPT = ROOT / "eval" / "eval_redteam.py"
 
 _README_ROW_RE = re.compile(
     r"\|\s*(deterministic \(this tool\)|naive keyword baseline)\s*\|\s*"
@@ -47,7 +47,7 @@ def _eval_numbers() -> dict:
     if proc.returncode != 0:
         print(proc.stdout)
         print(proc.stderr, file=sys.stderr)
-        raise SystemExit("eval/eval.py did not exit 0; cannot verify README numbers against it")
+        raise SystemExit("eval/eval_redteam.py did not exit 0; cannot verify README numbers against it")
     out = {}
     for label, recall, precision, fp in _EVAL_ROW_RE.findall(proc.stdout):
         key = "deterministic" if label == "deterministic" else "naive"
@@ -68,13 +68,13 @@ def main() -> int:
         if readme[key] != fresh[key]:
             print(
                 f"MISMATCH [{key}]: README says recall/precision/clean_FP={readme[key]}, "
-                f"eval/eval.py says {fresh[key]}",
+                f"eval/eval_redteam.py says {fresh[key]}",
                 file=sys.stderr,
             )
             ok = False
 
     if ok:
-        print("OK: README head-to-head numbers match the fresh eval/eval.py output.")
+        print("OK: README head-to-head numbers match the fresh eval/eval_redteam.py output.")
     return 0 if ok else 1
 
 

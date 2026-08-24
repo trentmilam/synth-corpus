@@ -9,12 +9,28 @@ evidence) and records exactly where each one is. That record is the ground truth
 of every planted defect and its location, which any downstream detector can be scored against.
 Generation is deterministic and runs offline. This produces test data, not real filings.
 
+The repo also contains **redteam**, the detector scored against that answer key: it flags
+figures that contradict each other across documents, performance claims the data doesn't
+support, and arithmetic that doesn't reconcile.
+
+**Read the headline score with that in mind.** redteam gets recall 1.000 and precision 1.000
+against this corpus, and that number means less than it looks like: the same author wrote both
+halves, and `eval/eval_redteam.py` maps synth-corpus's three planted flaw types onto redteam's
+three detectors one-to-one. It is a controlled measurement that the detector finds the defects
+it was built to find and raises nothing on clean documents - which is worth having, and is not
+evidence of performance on defects nobody anticipated. The two used to be separate repos, which
+made that closed loop easy to miss; they are one repo now so the loop is visible in the method
+rather than discovered by a reader.
+
 ## Quickstart
 
 ```
 pip install -e .
-python eval/eval.py     # 36/36 checks, exit 0
-python run_demo.py      # writes out/clean + out/flawed
+python eval/eval.py            # corpus generator: 36/36 checks, exit 0
+python run_demo.py             # writes out/clean + out/flawed
+python eval/eval_redteam.py    # detector scored against the answer key
+python run_redteam_demo.py     # one flawed corpus, scored end to end
+pytest -q                      # 33 tests
 ```
 
 The only dependency is numpy (seeded, for reproducibility), pinned in `pyproject.toml`
@@ -141,6 +157,22 @@ answer-key set as the world-reading oracle without ever reading the world
 2-doc disagreement, `detect_worldfree` honestly falls back to flagging both, since there's no
 majority to arbitrate.
 
+## Measured: the detector vs a naive baseline
+
+Same seeds, same packets, both scored against the answer key
+(`python eval/eval_redteam.py`):
+
+| detector | recall | precision | false positives on clean docs |
+|---|---|---|---|
+| deterministic (this tool) | 1.000 | 1.000 | 0 |
+| naive keyword baseline | 0.667 | 0.240 | 19 |
+
+The comparison is the informative half, not the 1.000s. A keyword matcher finds two thirds
+of the planted flaws but raises 19 findings on documents with nothing wrong with them, which
+in this setting is worse than useless - a reviewer who has to dismiss 19 false alarms stops
+reading the output. `scripts/check_readme_numbers.py` re-runs the eval and fails if this
+table drifts from what the code actually prints.
+
 ## Honest scope
 
 This release covers one WM alternatives-diligence world. Documents are templated, not
@@ -153,10 +185,15 @@ from adding new world states and renderers.
 
 ## Where it fits
 
-This is meant as a foundation other tools can build on: anything that needs labeled corpora with
-known answers, so it can be built and scored honestly. Examples include a decision red-team, or
-a document-grounding defense for a RAG system (a tool that answers questions by pulling in and
-citing source documents).
+The generator is meant as a foundation other tools can build on: anything that needs labeled
+corpora with known answers, so it can be built and scored honestly. `redteam/` is the worked
+example - a decision red-team that checks an AI-generated investment recommendation against its
+sources before anyone acts on it. Another would be a document-grounding defense for a RAG system
+(a tool that answers questions by pulling in and citing source documents).
+
+`redteam` began as its own repository. It was merged here because a detector and the corpus it
+is scored against are one experiment, and splitting them across two repos hid the fact that the
+same person wrote both. Its full commit history came with it.
 
 ## License
 

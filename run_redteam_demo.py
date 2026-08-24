@@ -14,16 +14,12 @@ README Quickstart (calls `redteam.verify.run_redteam` directly on an inline
 import os
 import sys
 
-REDTEAM_ROOT = os.path.dirname(os.path.abspath(__file__))
-# Appended at the END of sys.path (never index 0): a sibling directory
-# resolved purely by relative disk position must never get import priority
-# over anything already trusted on the path.
-sys.path.append(REDTEAM_ROOT)
+ROOT = os.path.dirname(os.path.abspath(__file__))
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
 
 from redteam.verify import run_redteam             # noqa: E402
-from synth_corpus_bootstrap import bootstrap_synth_corpus  # noqa: E402
-
-synthfin, generate = bootstrap_synth_corpus(REDTEAM_ROOT)
+from synthfin.generate import generate             # noqa: E402
 
 SEED = 12345
 _MAP = {"contradiction": "contradiction", "ungrounded_claim": "unsupported_claim", "arithmetic_error": "arithmetic"}

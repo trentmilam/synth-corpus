@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "synth-corpus"
 version = "0.1.0"
-description = "Synthetic financial corpus generator with a ground-truth answer key (labeled test harness)."
+description = "Synthetic financial corpus generator with a ground-truth answer key, and the red-team checker measured against it."
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.9"
@@ -18,4 +18,4 @@ synthfin-demo = "synthfin.cli:demo_main"
 synthfin-eval = "synthfin.cli:eval_main"
 
 [tool.setuptools]
-packages = ["synthfin"]
+packages = ["synthfin", "redteam"]
