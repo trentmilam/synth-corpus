@@ -22,6 +22,7 @@ jobs:
 
       - name: Run eval.py and verify the README's claimed numbers
         run: |
+          set -o pipefail   # else the exit status is tee's, and a FAILING command below stays green
           python eval/eval.py | tee eval_output.txt
           grep -q "RESULT: PASS" eval_output.txt
           grep -q "(36/36 checks)" eval_output.txt
@@ -29,6 +30,7 @@ jobs:
 
       - name: Run run_demo.py
         run: |
+          set -o pipefail   # else the exit status is tee's, and a FAILING command below stays green
           python run_demo.py | tee demo_output.txt
           grep -q "CLEAN corpus" demo_output.txt
           grep -q "FLAWED corpus" demo_output.txt
@@ -39,12 +41,14 @@ jobs:
       # to 0 findings cannot pass as green.
       - name: Run the red-team eval against the generated corpus
         run: |
+          set -o pipefail   # else the exit status is tee's, and a FAILING command below stays green
           python eval/eval_redteam.py | tee redteam_output.txt
           grep -q "RESULT: PASS" redteam_output.txt
           grep -q "recall=1.000  precision=1.000" redteam_output.txt
 
       - name: Run run_redteam_demo.py
         run: |
+          set -o pipefail   # else the exit status is tee's, and a FAILING command below stays green
           python run_redteam_demo.py | tee redteam_demo.txt
           grep -q "Score vs answer key" redteam_demo.txt
 
