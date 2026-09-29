@@ -1,4 +1,4 @@
-"""synth-corpus eval -- proves the harness is trustworthy. Exits 0 on all checks.
+"""synth-corpus eval: proves the harness is trustworthy. Exits 0 on all checks.
 
     python eval/eval.py
 
@@ -28,10 +28,10 @@ from synthfin.check import (                        # noqa: E402
 from synthfin.world import build_world             # noqa: E402
 
 SEED = 20260704  # primary seed for the demo output, no-op-rejection tests, and the
-                  # measured head-to-head (unaffected by seed choice -- see SEED_RANGE)
+                  # measured head-to-head (unaffected by seed choice, see SEED_RANGE)
 
 # Regression coverage: 1..200 plus seed 243 (both independently confirmed to produce a
-# negative lp_allocated_gain -- a fund posting a loss). 20 of these 201 seeds are
+# negative lp_allocated_gain, a fund posting a loss). 20 of these 201 seeds are
 # negative-gain (~10%, consistent with the ~8% measured across a larger sweep).
 SEED_RANGE = sorted(set(range(1, 201)) | {243})
 
@@ -144,7 +144,7 @@ def main() -> int:
         == build_world(s).lp_allocated_gain
         for s in neg_gain_seeds)
     # (2) direct repro of the originally-reported bug: seed=4, truth=-600000, an
-    #     arithmetic_error whose rendered result STAYS negative ($-100,000) -- before
+    #     arithmetic_error whose rendered result STAYS negative ($-100,000). Before
     #     the fix this was silently skipped (empty findings); now it must be caught.
     neg_flawed = generate(4, injects=[{"type": "arithmetic_error", "delta": 500_000}])
     neg_findings = check_consistency(neg_flawed)   # one-arg Corpus form
@@ -162,7 +162,7 @@ def main() -> int:
         return (len(findings) == 1 and findings[0]["type"] == "contradiction"
                 and findings[0]["doc"] == "ddq" and findings[0]["field"] == "management_fee")
 
-    # (a) Corpus + an explicitly WRONG World -> a seed is recoverable from both sides,
+    # (a) Corpus + an explicitly WRONG World: a seed is recoverable from both sides,
     #     so the mismatch is provable and MUST raise (never a fabricated finding set).
     def _raises_on_seed_mismatch() -> bool:
         try:
@@ -183,7 +183,7 @@ def main() -> int:
         issubclass(w.category, UserWarning) for w in caught)
 
     # (c) The mismatch-proof safe form: one-arg Corpus derives the world from the corpus's
-    #     own seed -- finds exactly the one real contradiction and emits NO warning.
+    #     own seed: finds exactly the one real contradiction and emits NO warning.
     with warnings.catch_warnings(record=True) as caught_safe:
         warnings.simplefilter("always")
         safe_findings = check_consistency(mismatched)
@@ -211,17 +211,17 @@ def main() -> int:
             return True
         return False
 
-    # (a) contradiction targeting a doc that carries no such label -> nothing changes
+    # (a) contradiction targeting a doc that carries no such label: nothing changes
     checks["reject_contradiction_missing_label"] = _rejected(
         {"type": "contradiction", "doc": "k1", "field": "management_fee"})
-    # (b) contradiction whose injected value EQUALS the world truth -> contradicts nothing
+    # (b) contradiction whose injected value EQUALS the world truth: contradicts nothing
     checks["reject_contradiction_equals_truth"] = _rejected(
         {"type": "contradiction", "doc": "ddq", "field": "management_fee", "value": world.mgmt_fee_pct})
-    # (c) arithmetic_error with delta=0 -> the rollforward still sums to NAV
+    # (c) arithmetic_error with delta=0: the rollforward still sums to NAV
     checks["reject_arithmetic_zero_delta"] = _rejected({"type": "arithmetic_error", "delta": 0})
-    # (d) unknown inject type -> nothing recognized to apply
+    # (d) unknown inject type: nothing recognized to apply
     checks["reject_unknown_inject_type"] = _rejected({"type": "not_a_real_type"})
-    # (e) empty ungrounded_claim text -> plants nothing
+    # (e) empty ungrounded_claim text: plants nothing
     checks["reject_empty_ungrounded_claim"] = _rejected({"type": "ungrounded_claim", "text": ""})
 
     # green: a valid contradiction on the SAME field/doc still records + is detectable (fix is not over-broad)
@@ -255,9 +255,9 @@ def main() -> int:
     # three fields that each appear in >=3 docs (so a majority exists to isolate the
     # odd-one-out) plus one arithmetic break, then score two WORLD-FREE detectors
     # against the labeled answer key:
-    #   * detect_naive     -- competent-but-naive: on any cross-doc disagreement, flag
+    #   * detect_naive:     competent-but-naive; on any cross-doc disagreement, flag
     #                         EVERY doc carrying that figure (cannot name the culprit).
-    #   * detect_worldfree -- majority-vote to isolate the deviating doc + re-derive the
+    #   * detect_worldfree: majority-vote to isolate the deviating doc + re-derive the
     #                         rollforward from its own lines. No world truth is read.
     ab_injects = [
         {"type": "contradiction", "doc": "ddq", "field": "management_fee"},   # in ppm,lpa,ddq,adv
@@ -287,9 +287,9 @@ def main() -> int:
     checks["naive_overflags"] = naive["fp"] > 0 and wf["fp"] == 0
     checks["worldfree_beats_naive_precision"] = wf["precision"] > naive["precision"]
 
-    # --- Exercise detect_worldfree's "no majority -> flag both" branch (2-doc tie) ---
+    # --- Exercise detect_worldfree's "no majority: flag both" branch (2-doc tie) ---
     # `hurdle` is the only FIELDS entry carried by exactly 2 documents (ppm, lpa), so a
-    # contradiction on it produces a genuine 1-vs-1 tie with no majority to arbitrate --
+    # contradiction on it produces a genuine 1-vs-1 tie with no majority to arbitrate:
     # the documented fallback branch that no other check in this file exercises.
     two_doc = generate(SEED, injects=[{"type": "contradiction", "doc": "ppm", "field": "hurdle"}])
     two_doc_wf = detect_worldfree(two_doc.docs)

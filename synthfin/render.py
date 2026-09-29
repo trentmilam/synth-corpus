@@ -4,7 +4,7 @@ rest is prose. All figures come from the world state, so a clean corpus ties out
 """
 from __future__ import annotations
 
-# Canonical labels (shared with check.py / inject.py -- do not drift)
+# Canonical labels (shared with check.py / inject.py; do not drift)
 LBL_MGMT_FEE = "Management fee:"
 LBL_CARRY = "Carried interest:"
 LBL_HURDLE = "Preferred return (hurdle):"

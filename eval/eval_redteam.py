@@ -1,19 +1,18 @@
-"""redteam-desk eval -- score the red-team against synth-corpus's labeled ground
+"""redteam eval: score the red-team against synth-corpus's labeled ground
 truth across seeds. Exits 0 on thresholds.
 
-This is the FULL REPRODUCTION path and requires the companion `synth-corpus`
-repo cloned as a sibling directory (see README "Full reproduction"):
+Runs directly against this repo's own `synthfin` and `redteam` packages, no
+separate checkout needed:
 
-    git clone https://github.com/trentmilam/synth-corpus ../synth-corpus
-    python eval/eval.py
+    python eval/eval_redteam.py
 
-For a zero-dependency example that needs nothing but this repo, see the
-README Quickstart (calls `redteam.verify.run_redteam` directly on an inline
-`docs` dict) or `tests/test_verify.py` (pytest, no synth-corpus required).
+`tests/test_verify.py` covers the same detectors with pytest, and the README
+Quickstart calls `redteam.verify.run_redteam` directly on an inline `docs`
+dict.
 
-Independent detectors vs an independently-generated answer key -> an honest score:
-clean packets raise NO findings (no false positives); flawed packets catch every
-planted flaw (recall 1.0) with no spurious findings (precision 1.0).
+Independent detectors scored against an independently-generated answer key:
+clean packets raise NO findings (no false positives); flawed packets catch
+every planted flaw (recall 1.0) with no spurious findings (precision 1.0).
 """
 import os
 import sys
@@ -47,11 +46,11 @@ def main() -> int:
     total_findings_flawed = 0
 
     for seed in SEEDS:
-        # clean packet -> no findings
+        # clean packet: no findings
         clean = run_redteam(generate(seed))
         clean_false_positives += len(clean["findings"])
 
-        # flawed packet -> catch every planted flaw
+        # flawed packet: catch every planted flaw
         corpus = generate(seed, injects=INJECTS)
         report = run_redteam(corpus)
         planted = corpus.manifest["flaws"]
@@ -66,28 +65,28 @@ def main() -> int:
 
     # --- red/green regression cases for the two adversarial-review fixes ---
     # (1) FAIL-OPEN on negative money: a broken rollforward hidden behind a LOSS
-    #     ($-5,000,000) must be caught -- and a CORRECT negative rollforward must not
+    #     ($-5,000,000) must be caught, and a CORRECT negative rollforward must not
     #     be flagged (proves negatives are parsed, not just always-flagged).
     neg_broken = {"capital_account": (
         "Contributions to date: $10,000,000\n"
-        "Allocated net gain: $-5,000,000\n"          # a loss -- was parsed as None (fail-open)
+        "Allocated net gain: $-5,000,000\n"          # a loss, previously parsed as None (fail-open)
         "Allocated management fees: $200,000\n"
         "Cumulative distributions: $1,000,000\n"
-        "Ending capital account (NAV): $9,000,000\n"  # 3,800,000 != 9,000,000 -> should FAIL
+        "Ending capital account (NAV): $9,000,000\n"  # 3,800,000 != 9,000,000: should FAIL
     )}
     neg_clean = {"capital_account": (
         "Contributions to date: $10,000,000\n"
         "Allocated net gain: $-5,000,000\n"
         "Allocated management fees: $200,000\n"
         "Cumulative distributions: $1,000,000\n"
-        "Ending capital account (NAV): $3,800,000\n"  # sums correctly -> no finding
+        "Ending capital account (NAV): $3,800,000\n"  # sums correctly: no finding
     )}
     checks["redcase_neg_rollforward_caught"] = len(detect_arithmetic(neg_broken)) == 1
     checks["redcase_neg_rollforward_clean_ok"] = detect_arithmetic(neg_clean) == []
 
     # (2) CORRECTNESS on a 1-1 tie: a two-doc disagreement must NOT single out one
     #     (possibly correct) doc. ppm carries the WRONG value first (old modal), lpa
-    #     the CORRECT one -- old code accused lpa alone; fix flags BOTH as unresolved.
+    #     the CORRECT one. Old code accused lpa alone; the fix flags BOTH as unresolved.
     two_doc = {
         "ppm": "Preferred return (hurdle): 9.0%\n",   # wrong, inserted first
         "lpa": "Preferred return (hurdle): 8.0%\n",   # correct, was wrongly accused alone
@@ -121,12 +120,12 @@ def main() -> int:
     # (4) FAIL-OPEN regression: a broken packet whose NAV disagrees with its own
     #     rollforward, but with the fee label reworded ("Mgmt fees allocated:"
     #     instead of the canonical "Allocated management fees:"), must NOT be
-    #     indistinguishable from a genuinely clean packet -- the verdict must
+    #     indistinguishable from a genuinely clean packet: the verdict must
     #     signal insufficient-data, never proceed.
     broken_reworded_label = {"capital_account": (
         "Contributions to date: $10,000,000\n"
         "Allocated net gain: $2,000,000\n"
-        "Mgmt fees allocated: $200,000\n"             # reworded -- won't be recognized
+        "Mgmt fees allocated: $200,000\n"             # reworded, won't be recognized
         "Cumulative distributions: $1,000,000\n"
         "Ending capital account (NAV): $12,800,000\n"  # overstated by $1.8-2.0M, unchecked
     )}
@@ -150,7 +149,7 @@ def main() -> int:
     # Turns the README's asserted "out-of-the-box keyword verifiers are unreliable"
     # into owned evidence: run the naive incumbent over the SAME labeled packets and
     # measure the gap. The baseline is a reasonable first-cut (keyword-anchored
-    # cross-doc consistency + performance-claim flagging), NOT a strawman -- it
+    # cross-doc consistency + performance-claim flagging), NOT a strawman: it
     # simply lacks the domain-modeled rollforward reconstruction and the canonical
     # anchored parsing that make the deterministic detector reliable.
     b_planted = b_hits = b_findings_flawed = b_clean_fp = 0
@@ -166,7 +165,7 @@ def main() -> int:
     b_recall = b_hits / b_planted if b_planted else 0.0
     b_precision = b_hits / b_findings_flawed if b_findings_flawed else 0.0
     # The deterministic detector must STRICTLY dominate the naive baseline on every
-    # axis -- higher recall, higher precision, fewer false positives on clean packets.
+    # axis: higher recall, higher precision, fewer false positives on clean packets.
     checks["baseline_recall_worse"] = recall > b_recall
     checks["baseline_precision_worse"] = precision > b_precision
     checks["baseline_more_clean_false_positives"] = clean_false_positives < b_clean_fp

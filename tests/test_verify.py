@@ -1,6 +1,6 @@
 """pytest suite for redteam/verify.py + redteam/baseline.py.
 
-Zero dependencies beyond the stdlib and pytest -- no synth-corpus, no numpy.
+Zero dependencies beyond the stdlib and pytest: no synth-corpus, no numpy.
 Run from the repo root:
 
     python -m pytest tests/ -v
@@ -18,7 +18,7 @@ from redteam.verify import (
 from redteam.baseline import naive_verify
 
 
-# --- fail-open regression -- "could not check" must never look like -------
+# --- fail-open regression: "could not check" must never look like ---------
 # --- "checked, and it's clean" ------------------------------------------------
 
 def test_empty_docs_is_insufficient_data_not_proceed():
@@ -37,12 +37,12 @@ def test_garbage_unmatched_doc_is_insufficient_data_not_proceed():
 def test_reworded_label_hides_broken_nav_but_verdict_is_not_proceed():
     """The NAV is overstated by ~$1.8-2.0M, but only because one label was reworded
     ("Mgmt fees allocated:" instead of the canonical "Allocated management
-    fees:"). The rollforward literally cannot be checked -- the verdict must
+    fees:"). The rollforward literally cannot be checked: the verdict must
     say so, not silently report proceed."""
     broken = {"capital_account": (
         "Contributions to date: $10,000,000\n"
         "Allocated net gain: $2,000,000\n"
-        "Mgmt fees allocated: $200,000\n"              # reworded -- unrecognized
+        "Mgmt fees allocated: $200,000\n"              # reworded, unrecognized
         "Cumulative distributions: $1,000,000\n"
         "Ending capital account (NAV): $12,800,000\n"  # unverified overstatement
     )}
@@ -219,7 +219,7 @@ def test_naive_verify_accepts_valid_docs():
 
 def test_case_and_wording_variant_labels_still_catch_a_real_contradiction():
     """A material contradiction must be caught even when neither document
-    uses the byte-identical canonical label text -- only case, punctuation,
+    uses the byte-identical canonical label text: only case, punctuation,
     and word order differ, not the meaning."""
     docs = {
         "ppm": "Fund Size / Total Commitments: $500,000,000\n",

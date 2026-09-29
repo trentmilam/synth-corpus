@@ -35,7 +35,7 @@ def test_bare_dict_wrong_world_warns():
 
 def test_corpus_plus_wrong_world_raises():
     """A provable seed mismatch (Corpus carries a seed, World carries a
-    different one) must raise -- never silently fabricate findings."""
+    different one) must raise; never silently fabricate findings."""
     c = _mismatched_corpus()
     with pytest.raises(ValueError):
         check_consistency(c, build_world(WRONG_SEED))

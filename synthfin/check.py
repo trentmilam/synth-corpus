@@ -1,17 +1,17 @@
-"""Consistency checker: does the corpus tie out to the world state?
+"""Consistency checker: verifies that the corpus ties out to the world state.
 
 For each canonical labeled figure, extract its value from every document that
-carries it and compare to the world truth -> a mismatch is a `contradiction`
+carries it and compare to the world truth: a mismatch is a `contradiction`
 finding. Separately, re-derive the capital-account rollforward from its own lines
-and verify the equation -> a mismatch is an `arithmetic` finding.
+and verify the equation: a mismatch is an `arithmetic` finding.
 
 This is what a clean corpus must pass (0 findings) and what makes injected flaws
 detectable at exactly their labeled locations.
 
 `check_consistency()` is a reference oracle: its whole job is being a trustworthy
 answer key, so scoring `docs` against the wrong `world` must never pass silently.
-The mismatch-proof way to call it is the one-argument Corpus form --
-``check_consistency(corpus)`` -- which derives the world from the corpus's own
+The mismatch-proof way to call it is the one-argument Corpus form,
+``check_consistency(corpus)``, which derives the world from the corpus's own
 recorded seed (structurally impossible to mismatch). See the docstring on
 `check_consistency` for every accepted input form, the raise-on-mismatch guard,
 and the unverifiable-pairing warning on the bare ``(docs, world)`` form.
@@ -19,8 +19,8 @@ and the unverifiable-pairing warning on the bare ``(docs, world)`` form.
 Vocabulary note: findings emitted here (and by `detect_worldfree`/`detect_naive`)
 use the type name ``"arithmetic"`` for a broken capital-account rollforward, while
 `inject.py`'s answer key records the same defect class as ``"arithmetic_error"``.
-The two vocabularies are intentionally NOT unified (renaming either is a breaking
-change for downstream integrators keyed on one or the other) -- a caller comparing
+The two vocabularies are NOT unified (renaming either is a breaking
+change for downstream integrators keyed on one or the other); a caller comparing
 findings against `manifest["flaws"]` must map between them itself; see
 `eval/eval.py`'s `_key()` for the reference mapping.
 """
@@ -65,7 +65,7 @@ def _value_after_label(text: str, label: str, kind: str):
     return None
 
 
-# Public aliases -- prefer these over the underscore-prefixed names above when
+# Public aliases: prefer these over the underscore-prefixed names above when
 # importing from outside this module (e.g. from a test harness or example).
 value_after_label = _value_after_label
 MONEY = _MONEY
@@ -87,12 +87,12 @@ def _resolve_world(world):
     `World` instance, plus the seed it corresponds to (or None if unknown).
 
     Accepts:
-      - a `World` instance (from `build_world()`) -- used as-is.
-      - a `Corpus` instance -- its `manifest['seed']` rebuilds the matching
+      - a `World` instance (from `build_world()`), used as-is.
+      - a `Corpus` instance: its `manifest['seed']` rebuilds the matching
         `World` internally, so the corpus can be re-scored without the caller
         having to separately remember the seed.
       - a manifest dict, e.g. `corpus.manifest` OR `corpus.manifest['world']`
-        (a `World.summary()` dict -- both carry a `'seed'` key) -- likewise
+        (a `World.summary()` dict, both carry a `'seed'` key), which likewise
         rebuilds the `World` from that seed. This is the safe way to re-score
         a corpus after persisting `manifest.json` and reloading it: pass the
         reloaded manifest dict here directly instead of trying to hand a
@@ -125,7 +125,7 @@ _UNVERIFIABLE_PAIRING_WARNING = (
 def check_consistency(docs, world=None) -> list:
     """Score `docs` against a world and return the list of findings.
 
-    Preferred, mismatch-proof form -- pass the `Corpus`::
+    Preferred, mismatch-proof form: pass the `Corpus`::
 
         check_consistency(corpus)
 
@@ -136,19 +136,20 @@ def check_consistency(docs, world=None) -> list:
     `docs` may be a `Corpus` or a plain `dict[str, str]` (as in `Corpus.docs`).
     `world` may be omitted (only valid when `docs` is a `Corpus`), or given as a
     `World`, a `Corpus`, or a manifest-shaped dict (`corpus.manifest` or
-    `corpus.manifest['world']` -- both carry a `'seed'`, resolved via
+    `corpus.manifest['world']`, both carry a `'seed'`, resolved via
     `_resolve_world`).
 
     Safety semantics:
 
-    * `world` omitted and `docs` is a plain dict -> `ValueError` (no seed to
-      derive a world from).
-    * a seed is recoverable from BOTH sides and they differ -> `ValueError`
-      (raise-on-mismatch; never silently grade against the wrong world).
-    * `docs` is a plain dict (no recoverable seed) and a `world` is supplied ->
-      a `UserWarning` is emitted EVERY time (matched or not): the pairing is
+    * `world` omitted and `docs` is a plain dict: raises `ValueError` (no seed
+      to derive a world from).
+    * a seed is recoverable from BOTH sides and they differ: raises
+      `ValueError` (raise-on-mismatch; never silently grade against the wrong
+      world).
+    * `docs` is a plain dict (no recoverable seed) and a `world` is supplied:
+      a `UserWarning` is emitted EVERY time (matched or not). The pairing is
       caller-asserted and cannot be verified, so the classic silent-wrong
-      hazard -- `check_consistency(corpus.docs, build_world(WRONG_SEED))` --
+      hazard, `check_consistency(corpus.docs, build_world(WRONG_SEED))`,
       now warns loudly instead of returning a fabricated finding set.
     """
     docs_seed = _corpus_seed(docs)
@@ -216,7 +217,7 @@ def check_consistency(docs, world=None) -> list:
 #
 # check_consistency() above is a reference *oracle*: it is handed the world it grades
 # against, so passing it proves nothing about detection difficulty. These detectors
-# never read the world -- they are the objects a downstream tool actually has to be.
+# never read the world: they are the objects a downstream tool actually has to be.
 # ---------------------------------------------------------------------------------
 
 def _collect_field_values(docs: dict) -> dict:
@@ -255,7 +256,7 @@ def _rollforward_finding(docs: dict) -> list:
 
 def detect_naive(docs: dict) -> list:
     """Naive world-free baseline: what a competent engineer does with NO ground truth
-    and no consensus reasoning -- when a labeled figure disagrees across documents,
+    and no consensus reasoning: when a labeled figure disagrees across documents,
     flag EVERY document that carries it (the conflict is real, but the culprit cannot
     be named). Plus the same self-contained rollforward check.
     """
@@ -272,9 +273,9 @@ def detect_naive(docs: dict) -> list:
 def detect_worldfree(docs: dict) -> list:
     """World-free consensus detector: for each labeled figure carried by multiple
     documents, take the MAJORITY value as the (unstated) consensus and flag only the
-    documents that deviate from it -- isolating the odd-one-out without any world truth.
+    documents that deviate from it, isolating the odd-one-out without any world truth.
     Falls back to the naive flag-all behaviour when there is no clear majority (a tie or
-    all-distinct set), which is honest: with 2 disagreeing docs you cannot tell which is
+    all-distinct set): with 2 disagreeing docs you cannot tell which is
     wrong. Plus the self-contained rollforward check.
     """
     findings = []
@@ -282,18 +283,18 @@ def detect_worldfree(docs: dict) -> list:
         rounded = {name: round(v, 6) for name, v in vals.items()}
         distinct = set(rounded.values())
         if len(distinct) <= 1:
-            continue                                            # all agree -> clean
+            continue                                            # all agree: clean
         counts = Counter(rounded.values()).most_common()
         top_val, top_n = counts[0]
         second_n = counts[1][1] if len(counts) > 1 else 0
         if top_n >= 2 and top_n > second_n:
-            # clear majority -> flag only the deviating documents
+            # clear majority: flag only the deviating documents
             for name, v in vals.items():
                 if rounded[name] != top_val:
                     findings.append({"type": "contradiction", "doc": name, "field": key,
                                      "found": v, "expected": top_val})
         else:
-            # no majority to arbitrate -> honestly cannot isolate; flag all disagreeing
+            # no majority to arbitrate: cannot isolate the culprit; flag all disagreeing
             for name, v in vals.items():
                 findings.append({"type": "contradiction", "doc": name, "field": key,
                                  "found": v})

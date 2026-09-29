@@ -4,7 +4,7 @@
 Runs `eval/eval_redteam.py` fresh, parses its printed HEAD-TO-HEAD numbers, parses
 the README's checked-in table, and fails (non-zero exit) if they don't match
 exactly. Run locally after any change that could move the numbers, or in CI
-on every push/PR -- this is what should have caught the numbers going stale
+on every push/PR: this is what should have caught the numbers going stale
 before they were ever published.
 
     python scripts/check_readme_numbers.py

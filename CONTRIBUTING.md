@@ -10,13 +10,13 @@ python run_demo.py      # writes out/clean + out/flawed and prints the answer ke
 
 `eval/eval.py` is the source of truth for every number quoted in the README (check count,
 precision/recall, the naive-vs-worldfree precision gap). If you change `synthfin/`, re-run it and
-update the README numbers to match — do not hand-edit README figures without a run to back them.
+update the README numbers to match. Do not hand-edit README figures without a run to back them.
 
 ## Adding a flaw type
 
 Flaw types live in `synthfin/inject.py` (`apply_injects`). Each one must:
 
-1. Mutate a real, present figure or line — reject no-op injections (see the existing `ValueError`
+1. Mutate a real, present figure or line, and reject no-op injections (see the existing `ValueError`
    guards for examples: missing label, injected value equal to truth, zero-delta arithmetic error).
 2. Return a label dict with at least `{type, doc, field, truth, injected}` so downstream tools can
    score against it.
@@ -27,5 +27,5 @@ Flaw types live in `synthfin/inject.py` (`apply_injects`). Each one must:
 
 Canonical figures live in `synthfin/check.py`'s `FIELDS` dict and are rendered via a label constant
 in `synthfin/render.py`. If you add one, add a contradiction round-trip test for it in `eval/eval.py`
-(see the loop over `fund_size`, `hurdle`, `distributions`, `ending_nav` for the pattern) — an
+(see the loop over `fund_size`, `hurdle`, `distributions`, `ending_nav` for the pattern): an
 untested field can silently regress without failing "N/N checks".

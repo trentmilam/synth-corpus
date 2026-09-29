@@ -1,22 +1,23 @@
 """Deterministic red-team detectors + verdict.
 
-Independent of the synth-corpus injector/checker (so scoring against its answer
-key is honest): contradictions are found by comparing documents to EACH OTHER
-(not to a hidden world truth); the arithmetic check is a fresh reconstruction;
-the unsupported-claim check targets rate-of-return assertions that an
-alternatives data room structurally cannot substantiate (no dated cash flows).
+Independent of the synth-corpus injector/checker, so it shares no logic with
+the answer key it is scored against: contradictions are found by comparing
+documents to EACH OTHER (not to a hidden world truth); the arithmetic check
+is a fresh reconstruction; the unsupported-claim check targets rate-of-return
+assertions that an alternatives data room structurally cannot substantiate
+(no dated cash flows).
 
 Expected `docs` schema
 -----------------------
 `docs` is a `dict[str, str]` mapping a document name to its raw text. Canonical
-document names (not all are required -- see per-check notes below): `ppm`,
+document names (not all are required; see per-check notes below): `ppm`,
 `lpa`, `ddq`, `adv`, `k1`, `capital_account`, `ic_memo`.
 
 - `detect_contradictions` scans EVERY document for any line whose text before
   the first colon names one of the canonical figure labels in `LABELS` below.
   Matching is case-insensitive and tolerant of whitespace, punctuation, and
   word order (e.g. "Fund Size / Total Commitments:" and "total commitments
-  (fund size):" both resolve to the same canonical label) -- but not of
+  (fund size):" both resolve to the same canonical label), but not of
   genuinely different wording. A contradiction only fires once the SAME
   label is found with DIFFERENT values in >=2 documents.
 - `detect_unsupported_returns` only reads `docs["ic_memo"]`.
@@ -25,18 +26,18 @@ document names (not all are required -- see per-check notes below): `ppm`,
   starting its own line, verbatim (a reworded label, e.g. "Mgmt fees
   allocated:" instead of the canonical "Allocated management fees:", will NOT
   be recognized). If any is missing or unmatched the rollforward cannot be
-  verified -- see `capital_account_coverage` and the `insufficient-data`
+  verified; see `capital_account_coverage` and the `insufficient-data`
   verdict below.
 
 Verdict semantics (`run_redteam`)
 ----------------------------------
-- `high-risk`         -- a contradiction or arithmetic-break finding fired.
-- `caution`           -- only an unsupported-claim finding fired.
-- `insufficient-data` -- no findings fired AND the capital_account rollforward
+- `high-risk`: a contradiction or arithmetic-break finding fired.
+- `caution`: only an unsupported-claim finding fired.
+- `insufficient-data`: no findings fired AND the capital_account rollforward
   could not be verified (a required label was missing/unmatched). This is
   DISTINCT from `proceed` on purpose: "nothing was checked" must never look
   identical to "checked, and it's clean."
-- `proceed`           -- no findings fired AND the capital_account rollforward
+- `proceed`: no findings fired AND the capital_account rollforward
   was fully verified.
 
 The returned dict also carries a `coverage` field recording which canonical
@@ -61,7 +62,7 @@ LABELS = [
     "Ending capital account (NAV):",
 ]
 # money-valued labels: rendered with thousands separators (matching
-# detect_arithmetic's convention), never Python's {:g} -- which flips to
+# detect_arithmetic's convention), never Python's {:g}, which flips to
 # unreadable scientific notation ("5e+08") for any value >= 1e6, i.e. most
 # dollar figures this tool exists to check. The rest of LABELS are percentages.
 _MONEY_LABELS = {
@@ -144,9 +145,9 @@ def _labeled_value(text: str, label: str):
 def _normalize_label_tokens(text: str) -> frozenset:
     """Lowercase, punctuation-stripped word-token set for a label, used to
     recognize the SAME canonical figure across case/whitespace/word-order
-    variance -- e.g. "TOTAL COMMITMENTS (FUND SIZE):" and "Fund Size / Total
+    variance: e.g. "TOTAL COMMITMENTS (FUND SIZE):" and "Fund Size / Total
     Commitments:" both denote the canonical "Total commitments (fund size):"
-    label -- while leaving genuinely different labels un-matched (no two of
+    label, while leaving genuinely different labels un-matched (no two of
     the `LABELS` below share a token set)."""
     return frozenset(re.findall(r"[a-z0-9]+", text.lower()))
 
@@ -158,8 +159,8 @@ _LABEL_TOKENS = {_normalize_label_tokens(lbl): lbl for lbl in LABELS}
 
 def _match_canonical_label(line: str):
     """If `line`'s text before its first ':' names one of the canonical
-    `LABELS` -- allowing case, whitespace, punctuation, and word-order
-    variance -- return `(canonical_label, value_text)`, where `value_text` is
+    `LABELS`, allowing case, whitespace, punctuation, and word-order
+    variance, return `(canonical_label, value_text)`, where `value_text` is
     everything after that colon. Returns `None` if no canonical label is
     recognized."""
     head, sep, tail = line.partition(":")
@@ -180,7 +181,7 @@ def _figures(docs: dict) -> dict:
     """{label: {doc_name: value}} for every labeled figure found.
 
     Raises ValueError if the same canonical label appears more than once
-    within a single document with a DIFFERING value -- silently keeping only
+    within a single document with a DIFFERING value: silently keeping only
     the last occurrence would hide an intra-document contradiction (the label
     disagreeing with itself), so this is a fail-loud invariant rather than a
     silent overwrite. A label repeating the same value twice is harmless and
@@ -206,7 +207,7 @@ def _figures(docs: dict) -> dict:
 
 
 def detect_contradictions(docs: dict) -> list:
-    """Same figure, different value across documents -> contradiction (the
+    """Same figure, different value across documents: a contradiction (the
     documents disagree with each other). The minority document(s) are flagged."""
     findings = []
     for lbl, per_doc in _figures(docs).items():
@@ -216,7 +217,7 @@ def detect_contradictions(docs: dict) -> list:
         top_count = counts.most_common(1)[0][1]
         majority = [val for val, c in counts.items() if c == top_count]
         if len(majority) == 1:
-            # a clear majority -> flag only the minority (disagreeing) documents
+            # a clear majority: flag only the minority (disagreeing) documents
             modal = majority[0]
             for name, v in per_doc.items():
                 if round(v, 6) != modal:
@@ -227,7 +228,7 @@ def detect_contradictions(docs: dict) -> list:
                     })
         else:
             # no majority (e.g. a 1-1 tie): we cannot tell which doc is correct, so
-            # do NOT accuse either -- flag ALL conflicting docs as an unresolved conflict.
+            # do NOT accuse either; flag ALL conflicting docs as an unresolved conflict.
             others = sorted({round(v, 6) for v in per_doc.values()})
             for name, v in per_doc.items():
                 disagree = [_fmt(o, lbl) for o in others if o != round(v, 6)]
@@ -243,7 +244,7 @@ def detect_contradictions(docs: dict) -> list:
 def detect_unsupported_returns(docs: dict) -> list:
     """Flag every rate-of-return (IRR / annualized return) assertion in the IC
     memo for manual review. This does NOT check whether the figure is
-    substantiated elsewhere in the data room -- v1 has no dated-cash-flow
+    substantiated elsewhere in the data room: v1 has no dated-cash-flow
     model to check it against, so it flags every such assertion
     unconditionally rather than silently passing any of them."""
     findings = []
@@ -288,7 +289,7 @@ def capital_account_coverage(docs: dict) -> dict:
 
     This is the coverage/unverifiable signal `run_redteam` uses to distinguish
     "the rollforward was checked and it's clean" from "the rollforward could
-    not be checked" (e.g. a required label is missing or reworded) -- the two
+    not be checked" (e.g. a required label is missing or reworded). The two
     must never collapse into the same verdict.
     """
     ca = docs.get("capital_account", "")
@@ -309,8 +310,8 @@ def run_redteam(corpus_or_docs) -> dict:
     elif findings:
         verdict = "caution"
     elif ca_coverage["missing"]:
-        # nothing was found wrong, but the rollforward -- the tool's own core
-        # check -- could not be verified at all; never render this as "proceed".
+        # nothing was found wrong, but the rollforward (the tool's own core
+        # check) could not be verified at all; never render this as "proceed".
         verdict = "insufficient-data"
     else:
         verdict = "proceed"
@@ -319,7 +320,7 @@ def run_redteam(corpus_or_docs) -> dict:
     coverage = {
         "capital_account_fields_found": ca_coverage["found"],
         "capital_account_fields_missing": ca_coverage["missing"],
-        # every canonical LABEL, always present -- an empty list means it was
+        # every canonical LABEL, always present: an empty list means it was
         # not found in ANY document, not merely "omitted from this dict".
         "labels_located": {lbl: sorted(per_doc) for lbl, per_doc in figures.items()},
         "labels_not_located": [lbl for lbl, per_doc in figures.items() if not per_doc],

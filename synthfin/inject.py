@@ -3,15 +3,15 @@
 Each injection returns a label ``{type, doc, field, truth, injected}`` so a
 downstream tool can be scored against ground truth. Supported:
 
-* ``contradiction``   -- change a canonical figure in one doc to disagree with the world.
-* ``arithmetic_error``-- break the capital-account rollforward (change one input line,
-                         leave the stated NAV) so it no longer sums.
-* ``ungrounded_claim``-- append a claim to the IC memo asserting a metric absent from
-                         the data room (nothing in the corpus supports it).
+* ``contradiction``: change a canonical figure in one doc to disagree with the world.
+* ``arithmetic_error``: break the capital-account rollforward (change one input line,
+  leave the stated NAV) so it no longer sums.
+* ``ungrounded_claim``: append a claim to the IC memo asserting a metric absent from
+  the data room (nothing in the corpus supports it).
 
 Vocabulary note: this module's answer key records a broken rollforward as flaw type
 ``"arithmetic_error"``, while `check.py`'s detectors report the same defect class as
-finding type ``"arithmetic"``. This split is intentional and NOT unified -- see
+finding type ``"arithmetic"``. This split is NOT unified; see
 `check.py`'s module docstring and the README for the mapping a downstream caller needs.
 """
 from __future__ import annotations
@@ -80,12 +80,12 @@ def apply_injects(docs: dict, world, injects: list):
             flaws.append({"type": typ, "doc": doc, "field": field, "truth": truth, "injected": injected})
 
         elif typ == "arithmetic_error":
-            # inflate the allocated-net-gain input; leave the stated NAV -> rollforward breaks
+            # inflate the allocated-net-gain input; leave the stated NAV: rollforward breaks
             delta = float(inj.get("delta", 7_000_000))
             truth_gain = float(world.lp_allocated_gain)
             bad = truth_gain + delta
             # A recorded flaw must be a REAL break: a zero (or sub-rounding) delta leaves the
-            # RENDERED gain equal to truth, so the rollforward still sums to NAV -- no error.
+            # RENDERED gain equal to truth, so the rollforward still sums to NAV: no error.
             if fmt_money(bad) == fmt_money(truth_gain):
                 raise ValueError(
                     f"no-op arithmetic_error: delta {delta} leaves the rollforward summing to NAV")

@@ -1,15 +1,13 @@
-"""redteam-desk demo: generate a flawed decision packet with synth-corpus, run the
+"""redteam demo: generate a flawed decision packet with synth-corpus, run the
 red-team, print the report, and score it against the labeled answer key.
 
-This is the FULL REPRODUCTION path and requires the companion `synth-corpus`
-repo cloned as a sibling directory (see README "Full reproduction"):
+Runs directly against this repo's own `synthfin` and `redteam` packages, no
+separate checkout needed:
 
-    git clone https://github.com/trentmilam/synth-corpus ../synth-corpus
-    python run_demo.py
+    python run_redteam_demo.py
 
-For a zero-dependency example that needs nothing but this repo, see the
-README Quickstart (calls `redteam.verify.run_redteam` directly on an inline
-`docs` dict).
+The README Quickstart shows an even smaller example: calling
+`redteam.verify.run_redteam` directly on an inline `docs` dict.
 """
 import os
 import sys

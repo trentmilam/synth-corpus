@@ -1,20 +1,20 @@
-"""A NAIVE keyword/regex citation verifier -- the incumbent baseline.
+"""A NAIVE keyword/regex citation verifier, the incumbent baseline.
 
 This is what a competent engineer reaches for FIRST when asked to "flag integrity
 problems in a decision packet": a single-pass keyword/regex scanner. It is NOT a
-crippled strawman -- it makes a genuine, reasonable attempt at all the same finding
+crippled strawman: it makes a genuine, reasonable attempt at all the same finding
 types the deterministic detectors target, using the surface heuristics a keyword
 verifier actually has:
 
-* contradictions  -- keyword-anchored cross-document number consistency: for a
-                     lexicon of economic terms, pull the first number off any line
-                     mentioning the term, and flag docs whose value differs from the
-                     modal one. (A reasonable keyword-anchored cross-doc check.)
-* unsupported     -- performance-claim flagging: any line naming a performance metric
-                     (IRR / return / MOIC / TVPI / DPI) next to a number is flagged
-                     for substantiation.
+* contradictions: keyword-anchored cross-document number consistency. For a
+  lexicon of economic terms, pull the first number off any line mentioning
+  the term, and flag docs whose value differs from the modal one. (A
+  reasonable keyword-anchored cross-doc check.)
+* unsupported: performance-claim flagging. Any line naming a performance
+  metric (IRR / return / MOIC / TVPI / DPI) next to a number is flagged for
+  substantiation.
 
-What it structurally CANNOT do -- and this is the measured wedge, not a rigged gap --
+What it structurally CANNOT do (and this is the measured wedge, not a rigged gap)
 is re-derive the capital-account rollforward. A keyword scanner has no domain formula
 model, so it never catches the arithmetic break. That is exactly the value the
 deterministic, domain-modeled detector adds.
@@ -29,7 +29,7 @@ import re
 from .verify import validate_docs
 
 # A reasonable keyword lexicon a first-cut engineer would use for a PE data room.
-# Substring keywords (lowercased), NOT the tool's canonical anchored labels -- this
+# Substring keywords (lowercased), NOT the tool's canonical anchored labels; this
 # is the naive approximation of the tool's schema-aware parsing.
 _CONTRA_KEYWORDS = [
     "management fee",

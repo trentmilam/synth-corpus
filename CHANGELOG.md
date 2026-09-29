@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented in this file.
 
-## 0.1.0 — first public release
+## 0.1.0: first public release
 
 - Synthetic wealth-domain document generator (`ppm`, `lpa`, `ddq`, `adv`, `k1`, `capital_account`,
   `ic_memo`) rendered from one seeded, internally-consistent world state.
@@ -13,7 +13,7 @@ All notable changes to this project are documented in this file.
   negative `lp_allocated_gain`, plus a measured naive-vs-worldfree precision head-to-head.
 - Packaging via `pyproject.toml` (`pip install -e .`); CI runs `eval/eval.py` and `run_demo.py` on
   every push/PR and greps stdout for the numbers this README quotes.
-- `check_consistency()` gains a mismatch-proof one-argument form — `check_consistency(corpus)` —
+- `check_consistency()` gains a mismatch-proof one-argument form, `check_consistency(corpus)`,
   that rebuilds the world from the corpus's own recorded seed. A provable seed mismatch raises
   `ValueError`; the unverifiable bare `(docs, world)` form now emits a `UserWarning`.
 - `pytest`-discoverable `tests/`, `console_scripts` entry points (`synthfin-demo`, `synthfin-eval`),

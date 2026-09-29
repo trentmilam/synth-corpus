@@ -1,4 +1,4 @@
-"""synthfin -- synthetic financial corpus generator (labeled test-harness).
+"""synthfin: synthetic financial corpus generator (labeled test-harness).
 
 Renders a coherent set of wealth-manager alternatives-diligence documents (PPM,
 LPA, DDQ, ADV, K-1, capital-account statement, IC memo) from ONE seeded world
