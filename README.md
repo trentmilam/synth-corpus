@@ -1,26 +1,20 @@
 # synth-corpus
 
-If you're building a tool that's supposed to catch errors or contradictions in financial
-paperwork, you need test data where the problems are already known, so you can measure whether
-the tool actually finds them. **synth-corpus** generates realistic-looking sets of fund
-documents that all trace back to one consistent underlying "world," then plants defects on
-purpose (a contradiction between two documents, an arithmetic error, a claim with no supporting
-evidence) and records exactly where each one is. That record is the ground truth: an answer key
-of every planted defect and its location, which any downstream detector can be scored against.
-Generation is deterministic and runs offline. This produces test data, not real filings.
+Synthetic fund-document corpora with planted, labeled defects, plus **redteam**, a detector scored against them.
 
-The repo also contains **redteam**, the detector scored against that answer key: it flags
-figures that contradict each other across documents, performance claims the data doesn't
-support, and arithmetic that doesn't reconcile.
+- Generates fund documents from one consistent seeded "world"
+- Plants defects: contradiction, arithmetic error, ungrounded claim
+- Records each defect and its location: the answer key
+- Deterministic, offline
+- Test data, not real filings
 
-**Read the headline score with that in mind.** redteam gets recall 1.000 and precision 1.000
-against this corpus, and that number means less than it looks like: the same author wrote both
-halves, and `eval/eval_redteam.py` maps synth-corpus's three planted flaw types onto redteam's
-three detectors one-to-one. It is a controlled measurement that the detector finds the defects
-it was built to find and raises nothing on clean documents. That is worth having, but it is not
-evidence of performance on defects nobody anticipated. The two used to be separate repos, which
-made that closed loop easy to miss; they are one repo now so the loop is visible in the method
-rather than discovered by a reader.
+redteam flags cross-document contradictions, unsupported performance claims, and arithmetic that doesn't reconcile.
+
+## Headline score
+
+- redteam: recall 1.000, precision 1.000 against this corpus
+- Flaw types mapped one-to-one onto detectors (`eval/eval_redteam.py`)
+- No unanticipated defects tested
 
 ## Quickstart
 
@@ -33,74 +27,64 @@ python run_redteam_demo.py     # one flawed corpus, scored end to end
 pytest -q                      # 33 tests
 ```
 
-The only dependency is numpy (seeded, for reproducibility), pinned in `pyproject.toml`
-(`numpy>=1.24,<3`). Documents are templated markdown; the manifest is JSON.
+Only dependency: numpy (`numpy>=1.24,<3`, pinned in `pyproject.toml`). Documents are templated markdown; the manifest is JSON.
 
 ## What it produces
 
-Calling `generate(seed, injects=[...])` returns a `Corpus` with two fields, `docs` and
-`manifest`.
+`generate(seed, injects=[...])` returns a `Corpus` with `docs` and `manifest`.
 
-`docs` holds seven documents: `ppm, lpa, ddq, adv, k1, capital_account, ic_memo` (an offering
-memo, a limited partnership agreement, a due-diligence questionnaire, a Form ADV, a K-1 tax
-form, a capital-account statement, and an investment-committee memo), all drawn from one
-wealth-management (WM) alternatives-diligence world.
+`docs`: seven documents from one wealth-management (WM) alternatives-diligence world.
 
-`manifest` holds `{seed, world, flaws}`: `seed` is the integer that produced `docs`; `world` is
-`World.summary()`, a plain dict for display and inspection, not a `World` instance; `flaws` is
-the list of injected flaws, the answer key.
+- `ppm`: offering memo
+- `lpa`: limited partnership agreement
+- `ddq`: due-diligence questionnaire
+- `adv`: Form ADV
+- `k1`: K-1 tax form
+- `capital_account`: capital-account statement
+- `ic_memo`: investment-committee memo
 
-### Scoring a corpus (safe by construction)
+`manifest`: `{seed, world, flaws}`
 
-`check_consistency` is a reference oracle: a checker that already knows the fund's true values,
-so it isn't really detecting anything blind. It confirms the documents are internally
-consistent, and other detectors are later measured against it. It only gives correct results if
-it's checking the same `World` that produced the documents. Otherwise it fabricates
-plausible-looking findings. The safe way to call it is to pass the `Corpus` itself
-and let it rebuild the world from the corpus's own recorded seed. That pairing can't be
-mismatched:
+- `seed`: integer that produced `docs`
+- `world`: `World.summary()`, a plain dict
+- `flaws`: injected flaws, the answer key
+
+### Scoring a corpus
+
+`check_consistency` is a reference oracle.
+
+- Knows the true values
+- Wrong `World` gives fabricated findings
+
+Pass the `Corpus` and it rebuilds the world from the recorded seed:
 
 ```python
 c = generate(20260704, injects=[{"type": "contradiction", "doc": "ddq", "field": "management_fee"}])
 findings = check_consistency(c)   # preferred: world rebuilt from c.manifest['seed']; cannot mismatch
 ```
 
-Full set of accepted forms and their safety semantics (see `synthfin/check.py`'s docstring):
+Accepted forms (see `synthfin/check.py`'s docstring):
 
 | Call | Behavior |
 |---|---|
 | `check_consistency(c)` | Preferred. World derived from `c.manifest['seed']`; a mismatch is impossible. |
 | `check_consistency(c, world_or_manifest)` | Both sides carry a seed, so they're cross-checked; a true mismatch raises `ValueError`. |
-| `check_consistency(c.docs, build_world(seed))` | A bare `docs` dict carries no seed, so the pairing is unverifiable and emits a `UserWarning` every time. Passing the wrong seed here is the classic silent-wrong hazard, so it warns loudly rather than returning a fabricated set. |
+| `check_consistency(c.docs, build_world(seed))` | A bare `docs` dict carries no seed, so the pairing is unverifiable and emits a `UserWarning` every time. |
 | `check_consistency(c.docs)` | Raises `ValueError`: no seed to derive a world from. |
 
-After persisting `manifest.json` and reloading it, re-score safely by rebuilding the `Corpus`
-(or by regenerating with `generate(manifest['seed'])`) and using the one-arg form, or by passing
-the reloaded manifest alongside the corpus so both seeds are cross-checked:
+After reloading `manifest.json`, rebuild the `Corpus` (or `generate(manifest['seed'])`) and use the one-arg form, or pass the reloaded manifest alongside the corpus:
 
 ```python
 findings = check_consistency(c, reloaded_manifest)   # both seeds present → verified, no warning
 ```
 
-## Flaw types (labeled)
+## Flaw types
 
-- `contradiction`: a canonical figure (the one correct value for something like the management
-  fee, which should match everywhere it appears) disagrees between a document and the world, or
-  between two documents.
-- `arithmetic_error`: the capital-account rollforward (the running math that adds
-  contributions, subtracts distributions, and arrives at an ending balance) stops summing to the
-  stated NAV (net asset value).
-- `ungrounded_claim`: a metric in the investment-committee memo with no support anywhere else
-  in the corpus.
+- `contradiction`: a canonical figure (e.g. management fee) disagrees between a document and the world, or between two documents
+- `arithmetic_error`: the capital-account rollforward stops summing to the stated NAV (net asset value)
+- `ungrounded_claim`: a metric in the investment-committee memo with no support elsewhere in the corpus
 
-One naming quirk worth knowing: `manifest["flaws"]` (the answer key, written by `inject.py`)
-records this type as `arithmetic_error`, while the findings from `check_consistency` and
-`detect_worldfree` (written by `check.py`) name the same defect `arithmetic`, matching the
-general `contradiction`/`arithmetic` naming the checker uses throughout. The two vocabularies
-are kept separate on purpose: renaming either would break integrators who already key off one
-or the other. A tool comparing findings against the answer key has to map `arithmetic_error`
-(flaw type) to `arithmetic` (finding type) itself; see `_key()` in `eval/eval.py` for the
-reference mapping.
+Naming: `manifest["flaws"]` (from `inject.py`) uses `arithmetic_error`. Findings from `check_consistency` and `detect_worldfree` (from `check.py`) use `arithmetic`. A tool comparing the two maps between them; see `_key()` in `eval/eval.py`.
 
 ```python
 from synthfin import generate, check_consistency, build_world
@@ -115,32 +99,18 @@ answer_key = c.manifest["flaws"]                              # ground truth to 
 
 ## Measured (eval.py, exit 0, 36/36)
 
-A clean corpus ties out (0 findings, 0 flaws, arithmetic ties, all 7 docs present), and injected
-flaws are labeled and detected at exactly their locations
-(`contradiction_labels_match_detections`). This is checked across a 201-seed range, including 21
-seeds where a negative `lp_allocated_gain` occurs (a fund posting a loss renders, for example,
-`"Allocated net gain: $-2,650,000"`), not just one hand-picked seed. Every canonical figure
-(`management_fee`, `carried_interest`, `hurdle`, `fund_size`, `lp_commitment`, `distributions`,
-`ending_nav`) has its own contradiction-detection round trip. Generation is reproducible: the
-same seed and injects produce byte-identical docs and manifest.
+- Clean corpus: 0 findings, 0 flaws, arithmetic ties, all 7 docs present
+- Injected flaws labeled and detected at exactly their locations (`contradiction_labels_match_detections`)
+- Checked across a 201-seed range, including 21 seeds with a negative `lp_allocated_gain` (renders e.g. `"Allocated net gain: $-2,650,000"`)
+- Each canonical figure (`management_fee`, `carried_interest`, `hurdle`, `fund_size`, `lp_commitment`, `distributions`, `ending_nav`) has its own contradiction round trip
+- Same seed and injects: byte-identical docs and manifest
 
-### World-free detector vs a naive baseline (measured head-to-head)
+### World-free detector vs a naive baseline
 
-`check_consistency(docs, world)` is a reference oracle. It's handed the world it grades against,
-so passing it proves nothing about how hard the defects are to find. To show the harness
-actually scores detectors and not just the oracle, two world-free detectors (they compare
-documents to each other, never to the world's true values) are scored against the labeled
-answer key on a corpus with three contradictions that can be isolated and one arithmetic break:
+Two world-free detectors, scored against the answer key on a corpus with three isolatable contradictions and one arithmetic break:
 
-- `detect_naive(docs)` is a competent-but-naive baseline: on any cross-document disagreement, it
-  flags every document carrying that figure. The conflict is real, but it can't name the
-  culprit.
-- `detect_worldfree(docs)` takes a majority vote to isolate the odd one out, and re-derives
-  the capital-account rollforward from its own lines.
-
-The table below scores each detector by precision (of the things it flagged, how many were real
-defects), recall (of the real defects, how many it caught), and F1 (a single score combining the
-two):
+- `detect_naive(docs)`: on any cross-document disagreement, flags every document carrying that figure
+- `detect_worldfree(docs)`: majority vote isolates the odd one out; re-derives the capital-account rollforward from its own lines
 
 | detector | precision | recall | F1 | TP | FP | FN |
 |---|---|---|---|---|---|---|
@@ -148,52 +118,36 @@ two):
 | worldfree (no world) | 1.000 | 1.000 | 1.000 | 4 | 0 | 0 |
 | naive baseline | 0.364 | 1.000 | 0.533 | 4 | 7 | 0 |
 
-Both detectors find every real flaw (recall 1.000), but the naive baseline over-flags 7 innocent
-documents (precision 0.364), while the consensus detector isolates exactly the deviating
-document (precision 1.000), a measured precision gap of 0.636, and reaches the same
-answer-key set as the world-reading oracle without ever reading the world
-(`worldfree_matches_oracle`). [Measured on one seed, 20260704; all figures are printed by
-`eval/eval.py`.] Majority-vote isolation requires a figure to appear in ≥3 documents; on a
-2-doc disagreement, `detect_worldfree` falls back to flagging both, since there's no
-majority to arbitrate.
+- Precision gap: 0.636
+- `detect_worldfree` matches the oracle's answer-key set without reading the world (`worldfree_matches_oracle`)
+- One seed, 20260704; figures printed by `eval/eval.py`
+- Majority vote needs a figure in 3 or more documents; on a 2-doc disagreement `detect_worldfree` flags both
 
 ## Measured: the detector vs a naive baseline
 
-Same seeds, same packets, both scored against the answer key
-(`python eval/eval_redteam.py`):
+Same seeds, same packets, scored against the answer key (`python eval/eval_redteam.py`):
 
 | detector | recall | precision | false positives on clean docs |
 |---|---|---|---|
 | deterministic (this tool) | 1.000 | 1.000 | 0 |
 | naive keyword baseline | 0.667 | 0.240 | 19 |
 
-The comparison is the informative half, not the 1.000s. A keyword matcher finds two thirds
-of the planted flaws but raises 19 findings on documents with nothing wrong with them, which
-in this setting is worse than useless: a reviewer who has to dismiss 19 false alarms stops
-reading the output. `scripts/check_readme_numbers.py` re-runs the eval and fails if this
-table drifts from what the code actually prints.
+`scripts/check_readme_numbers.py` re-runs the eval and fails if this table drifts.
 
 ## Coverage and limits
 
-This release covers one WM alternatives-diligence world. Documents are templated, not
-LLM-generated: figures are internally consistent and plausible, but the paperwork doesn't have
-full regulatory depth. The structural checker catches numeric contradictions and arithmetic
-breaks. Semantic or ungrounded flaws, like an unsupported claim, aren't caught by this checker;
-they're labeled instead, so a downstream red-team (a separate detector built to catch exactly
-this kind of thing) can be scored against them. Support for hedge-fund and VC worlds would come
-from adding new world states and renderers.
+- One WM alternatives-diligence world
+- Documents are templated, not LLM-generated; no full regulatory depth
+- Structural checker catches numeric contradictions and arithmetic breaks
+- Ungrounded claims are labeled, not caught by the checker
+- Hedge-fund and VC worlds would need new world states and renderers
 
 ## Where it fits
 
-The generator is meant as a foundation other tools can build on: anything that needs labeled
-corpora with known answers, so it can be built and scored. `redteam/` is the worked
-example: a decision red-team that checks an AI-generated investment recommendation against its
-sources before anyone acts on it. Another would be a document-grounding defense for a RAG system
-(a tool that answers questions by pulling in and citing source documents).
-
-`redteam` began as its own repository. It was merged here because a detector and the corpus it
-is scored against are one experiment, and splitting them across two repos hid the fact that the
-same person wrote both. Its full commit history came with it.
+- Foundation for anything that needs labeled corpora with known answers
+- `redteam/`: decision red-team that checks an AI-generated investment recommendation against its sources
+- Document-grounding defense for a RAG system
+- `redteam` began as its own repository; merged here with full commit history
 
 ## License
 
